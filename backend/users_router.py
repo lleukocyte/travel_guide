@@ -1,8 +1,8 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends
-from backend.crud import UserCrud
+from fastapi import APIRouter, HTTPException
+from backend.users_crud import UserCrud
 from backend.security import create_jwt_token, verify_password
-from backend.schemas import UserCreate, UserRead, VerifyCode
+from backend.users_schemas import UserCreate, UserRead
 from backend.database import new_session
 
 user_router = APIRouter()
@@ -22,19 +22,12 @@ async def register(data: UserCreate):
         raise HTTPException(status_code=400, detail=ve)
     return {"email": user.email, "username": user.username}
 
-@user_router.post("/verify/")
-async def verify_email(data: VerifyCode):
-    success = await UserCrud.activate_user(data)
-    if not success:
-        raise HTTPException(status_code=400, detail="Invalid code")
-    return {"message": "User activated"}
-
 @user_router.post("/login/")
 async def login(data: UserRead):
     user = await UserCrud.get_user_by_email(data.email)
-    if not user or not verify_password(user.password_hash, data.password):
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="User not activated")
+    if not verify_password(user.password_hash, data.password):
+        raise HTTPException(status_code=403, detail="Invalid credentials")
     token = create_jwt_token({"sub": user.email, "user_id": user.id})
     return {"access_token": token, "token_type": "bearer"}

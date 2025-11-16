@@ -8,7 +8,3 @@ class UserCreate(BaseModel):
 class UserRead(BaseModel):
     email: EmailStr
     password: str
-
-class VerifyCode(BaseModel):
-    email: EmailStr
-    code: str

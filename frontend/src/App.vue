@@ -1,122 +1,148 @@
 <template>
   <div class="app-container">
-    <div class="toggle">
-      <button :class="{ active: mode === 'login' }" @click="switchMode('login')">Вход</button>
-      <button :class="{ active: mode === 'register' }" @click="switchMode('register')">Регистрация</button>
-    </div>
-
-    <!-- форма логина -->
-    <form v-if="mode === 'login'" @submit.prevent="login" class="form">
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" v-model="loginData.email" placeholder="Введите email" required />
+    <!-- Если не аутентифицирован - показываем формы -->
+    <div v-if="!isAuthenticated" class="auth-forms">
+      <div class="toggle">
+        <button :class="{ active: mode === 'login' }" @click="switchMode('login')">Вход</button>
+        <button :class="{ active: mode === 'register' }" @click="switchMode('register')">Регистрация</button>
       </div>
 
-      <div class="form-group">
-        <label>Пароль</label>
-        <input type="password" v-model="loginData.password" placeholder="Введите пароль" required />
-      </div>
-
-      <button type="submit" class="submit-btn" :disabled="loading">
-        {{ loading ? 'Загрузка...' : 'Войти' }}
-      </button>
-    </form>
-
-    <!-- форма регистрации -->
-    <form v-else @submit.prevent="codeSent ? verifyCode() : register()" class="form">
-      <div v-if="!codeSent">
+      <form v-if="mode === 'login'" @submit.prevent="login" class="form">
         <div class="form-group">
-          <label>Имя</label>
+          <label>Email</label>
+          <input type="email" v-model="loginData.email" placeholder="Введите email" required />
+        </div>
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" v-model="loginData.password" placeholder="Введите пароль" required />
+        </div>
+        <button type="submit" class="submit-btn" :disabled="loading">
+          {{ loading ? 'Вход...' : 'Войти' }}
+        </button>
+      </form>
+
+      <form v-else @submit.prevent="register" class="form">
+        <div class="form-group">
+          <label>Имя пользователя</label>
           <input type="text" v-model="registerData.username" placeholder="Введите имя" required />
         </div>
-
         <div class="form-group">
           <label>Email</label>
           <input type="email" v-model="registerData.email" placeholder="Введите email" required />
         </div>
-
         <div class="form-group">
           <label>Пароль</label>
           <input type="password" v-model="registerData.password" placeholder="Не менее 6 символов" required />
         </div>
-
-        <button type="submit" class="submit-btn" :disabled="loading">
+        <div class="form-group">
+          <label>Подтвердите пароль</label>
+          <input type="password" v-model="registerData.confirmPassword" placeholder="Повторите пароль" required />
+          <div v-if="registerData.confirmPassword && !passwordsMatch" class="error-text">
+            Пароли не совпадают
+          </div>
+        </div>
+        <button type="submit" class="submit-btn" :disabled="loading || !isRegisterFormValid">
           {{ loading ? 'Регистрация...' : 'Зарегистрироваться' }}
         </button>
-      </div>
+      </form>
 
-      <!-- поле ввода кода подтверждения -->
-      <div v-else>
-        <div class="form-group">
-          <label>Введите код из письма</label>
-          <input type="text" v-model="verificationCode" placeholder="Код из письма" required />
-        </div>
-        <button type="submit" class="submit-btn" :disabled="loading">
-          {{ loading ? 'Проверка...' : 'Подтвердить код' }}
-        </button>
-        <button type="button" @click="codeSent = false" class="back-btn">
-          Назад к регистрации
-        </button>
-      </div>
-    </form>
+      <!-- Временно показываем сообщения об ошибках -->
+      <p v-if="errorMessage" class="message error">{{ errorMessage }}</p>
+    </div>
 
-    <p v-if="message" :class="['message', messageType]">{{ message }}</p>
+    <!-- Если аутентифицирован - СРАЗУ показываем ленту мест -->
+    <PlacesApp v-else />
   </div>
 </template>
 
 <script>
+import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
-import { ref, reactive, computed } from 'vue'
+import PlacesApp from './components/Places.vue'
 
 export default {
+  name: 'App',
+  components: {
+    PlacesApp
+  },
   setup() {
     const mode = ref('login')
-    const codeSent = ref(false)
-    const message = ref('')
-    const verificationCode = ref('')
+    const errorMessage = ref('')
     const loading = ref(false)
-    const API_BASE = 'http://localhost:8000/api/'
+    const isAuthenticated = ref(false)
+    
+    const API_BASE = 'http://localhost:8000'
 
     const loginData = reactive({ email: '', password: '' })
-    const registerData = reactive({ email: '', username: '', password: '' })
-
-    // Определяем тип сообщения для стилей
-    const messageType = computed(() => {
-      return message.value.includes('Успеш') || message.value.includes('отправлен') 
-        ? 'success' 
-        : 'error'
+    const registerData = reactive({ 
+      email: '', username: '', password: '', confirmPassword: '' 
     })
 
-    const switchMode = (m) => {
-      mode.value = m
-      codeSent.value = false
-      message.value = ''
-      loading.value = false
+    // Проверяем аутентификацию при загрузке
+    const checkAuth = () => {
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        isAuthenticated.value = false
+        return
+      }
+
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        const exp = payload.exp * 1000
+        if (Date.now() >= exp) {
+          logout()
+        }
+      } catch (error) {
+        logout()
+      }
     }
 
-    const validatePassword = (password) => {
-      if (password.length < 6) {
-        return 'Пароль должен быть не менее 6 символов'
-      }
-      return null
+    const passwordsMatch = computed(() => 
+      registerData.password === registerData.confirmPassword
+    )
+
+    const isRegisterFormValid = computed(() => 
+      registerData.email && 
+      registerData.username && 
+      registerData.password && 
+      passwordsMatch.value &&
+      registerData.password.length >= 6
+    )
+
+    const switchMode = (newMode) => {
+      mode.value = newMode
+      errorMessage.value = ''
     }
 
     const login = async () => {
       if (loading.value) return
       
       loading.value = true
+      errorMessage.value = ''
+      
       try {
+        console.log('Отправка запроса на вход:', loginData)
         const response = await axios.post(`${API_BASE}/login`, loginData)
-        message.value = 'Успешный вход!'
-        // Здесь можно сохранить токен и перенаправить
-        console.log('Токен:', response.data.access_token)
-      } catch (e) {
-        if (e.response?.status === 401) {
-          message.value = 'Неверный email или пароль.'
-        } else if (e.response?.status === 403) {
-          message.value = 'Аккаунт не активирован. Проверьте email.'
+        console.log('Ответ от сервера:', response.data)
+        
+        const { access_token, username } = response.data
+        
+        // Сохраняем токен
+        localStorage.setItem('auth_token', access_token)
+        localStorage.setItem('user_data', JSON.stringify({ username }))
+        
+        // НЕМЕДЛЕННО переключаем на ленту мест
+        isAuthenticated.value = true
+        
+        // Очищаем форму
+        Object.assign(loginData, { email: '', password: '' })
+        
+      } catch (error) {
+        console.error('Ошибка входа:', error)
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          errorMessage.value = 'Неверный email или пароль'
         } else {
-          message.value = 'Ошибка входа. Попробуйте позже.'
+          errorMessage.value = 'Ошибка входа. Попробуйте позже.'
         }
       } finally {
         loading.value = false
@@ -126,103 +152,97 @@ export default {
     const register = async () => {
       if (loading.value) return
       
-      const passwordError = validatePassword(registerData.password)
-      if (passwordError) {
-        message.value = passwordError
-        return
-      }
-      
       loading.value = true
+      errorMessage.value = ''
+      
       try {
-        await axios.post(`${API_BASE}/register`, registerData)
-        codeSent.value = true
-        message.value = 'Код подтверждения отправлен на почту.'
-      } catch (e) {
-        if (e.response?.status === 400) {
-          message.value = 'Пользователь с таким email уже существует.'
+        await axios.post(`${API_BASE}/register`, {
+          email: registerData.email,
+          username: registerData.username,
+          password: registerData.password
+        })
+        
+        errorMessage.value = 'Регистрация успешна! Теперь войдите.'
+        
+        // Очищаем форму и переключаемся на вход
+        Object.assign(registerData, { 
+          email: '', username: '', password: '', confirmPassword: '' 
+        })
+        mode.value = 'login'
+        
+      } catch (error) {
+        if (error.response?.status === 400) {
+          errorMessage.value = error.response.data.detail || 'Ошибка регистрации'
         } else {
-          message.value = `Ошибка регистрации (${e.response?.status || 'нет ответа'}). Попробуйте позже.`
+          errorMessage.value = 'Ошибка регистрации. Попробуйте позже.'
         }
       } finally {
         loading.value = false
       }
     }
 
-    const verifyCode = async () => {
-      if (loading.value) return
-      
-      loading.value = true
-      try {
-        await axios.post(`${API_BASE}/verify`, {
-          email: registerData.email,
-          code: verificationCode.value,
-        })
-        message.value = 'Регистрация подтверждена! Теперь войдите.'
-        codeSent.value = false
-        mode.value = 'login'
-        Object.assign(registerData, { email: '', username: '', password: '' })
-        verificationCode.value = ''
-      } catch (e) {
-        message.value = 'Неверный код. Попробуйте снова.'
-      } finally {
-        loading.value = false
-      }
+    const logout = () => {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_data')
+      window.location.reload() // Перезагружаем страницу для возврата к форме входа
     }
+
+    onMounted(() => {
+      checkAuth()
+    })
 
     return {
       mode,
-      codeSent,
-      message,
-      messageType,
-      verificationCode,
+      errorMessage,
       loginData,
       registerData,
       loading,
+      isAuthenticated,
+      passwordsMatch,
+      isRegisterFormValid,
       switchMode,
       login,
-      register,
-      verifyCode,
+      register
     }
-  },
+  }
 }
 </script>
 
 <style scoped>
 .app-container {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.auth-forms {
   max-width: 400px;
   margin: 50px auto;
-  font-family: Arial, sans-serif;
+  padding: 20px;
 }
 
 .toggle {
   display: flex;
-  justify-content: center;
   margin-bottom: 20px;
 }
 
 .toggle button {
   flex: 1;
   padding: 10px;
-  cursor: pointer;
   border: none;
   background: none;
-  font-size: 16px;
+  cursor: pointer;
   font-weight: bold;
-  text-decoration: underline;
-  transition: all 0.2s;
 }
 
 .toggle button.active {
+  background: #007bff;
   color: white;
-  background-color: #007bff;
-  border-radius: 5px 5px 0 0;
-  text-decoration: none;
 }
 
 .form {
-  border: 1px solid #ccc;
+  border: 1px solid #ddd;
   padding: 20px;
-  border-radius: 0 5px 5px 5px;
+  border-radius: 5px;
 }
 
 .form-group {
@@ -231,69 +251,44 @@ export default {
 
 .form-group label {
   display: block;
-  font-weight: bold;
   margin-bottom: 5px;
+  font-weight: bold;
 }
 
 .form-group input {
   width: 100%;
   padding: 8px;
-  box-sizing: border-box;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.error-text {
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 5px;
 }
 
 .submit-btn {
   width: 100%;
   padding: 10px;
-  background-color: #007bff;
-  border: none;
+  background: #007bff;
   color: white;
-  font-weight: bold;
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
-  border-radius: 5px;
-  margin-bottom: 10px;
-}
-
-.submit-btn:hover:not(:disabled) {
-  background-color: #0056b3;
 }
 
 .submit-btn:disabled {
-  background-color: #6c757d;
+  background: #6c757d;
   cursor: not-allowed;
 }
 
-.back-btn {
-  width: 100%;
-  padding: 10px;
-  background-color: #6c757d;
-  border: none;
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
-  border-radius: 5px;
-}
-
-.back-btn:hover {
-  background-color: #545b62;
-}
-
-.message {
-  margin-top: 15px;
-  text-align: center;
-  font-weight: bold;
-  padding: 10px;
-  border-radius: 5px;
-}
-
-.message.success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
 .message.error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  color: #dc3545;
+  text-align: center;
+  margin-top: 15px;
+  padding: 10px;
+  background: #f8d7da;
+  border-radius: 4px;
 }
 </style>

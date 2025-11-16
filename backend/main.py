@@ -1,17 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.api.router import user_router
+from backend.users_router import user_router
+from backend.places_router import places_router
 from backend.database import create_tables, delete_tables
 from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
+import os
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await delete_tables()
-    print("База очищена")
+    #await delete_tables()
     await create_tables()
-    print("База готова к работе")
+    print("✅ База данных готова к работе")
     yield
-    print("Выключение")
+    print("🔴 Выключение")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -26,4 +28,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(user_router, prefix="/api")
+# Подключаем оба роутера
+app.include_router(user_router)
+app.include_router(places_router)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+async def root():
+    return {"message": "Places API работает!", "status": "ok"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "database": "SQLite"}
