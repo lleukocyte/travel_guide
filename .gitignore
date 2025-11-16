@@ -145,6 +145,7 @@ env.bak/
 venv.bak/
 *.db
 static/
+node_modules/
 
 # Spyder project settings
 .spyderproject

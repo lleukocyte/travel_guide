@@ -5,8 +5,8 @@
       <aside class="sidebar">
         <nav class="sidebar-nav">
           <ul>
-            <li><button @click="selectedTab='catalog'" class="nav-btn">Каталог</button></li>
-            <li><button @click="selectedTab='favorites'" class="nav-btn">Избранное</button></li>
+            <button @click="navigateTo('catalog')" class="nav-btn">Каталог</button>
+            <button @click="navigateTo('favorites')" class="nav-btn">Избранное</button>
           </ul>
         </nav>
         <button @click="logout" class="logout-btn">Выйти</button>
@@ -141,8 +141,9 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, inject } from 'vue'
 import axios from 'axios'
+import { useRoute, useRouter } from 'vue-router'
 
 export default {
   name: 'PlacesApp',
@@ -153,8 +154,16 @@ export default {
     const places = ref([])
     const showAddForm = ref(false)
     const addingPlace = ref(false)
-    const selectedTab = ref('catalog')
     const fileInput = ref(null)
+    
+    const route = useRoute()
+    const router = useRouter()
+    const logout = inject('logout') // Получаем функцию выхода из App.vue
+
+    // Определяем активную вкладку на основе текущего маршрута
+    const selectedTab = computed(() => {
+      return route.name === 'Favorites' ? 'favorites' : 'catalog'
+    })
 
     const newPlace = reactive({
       name: '',
@@ -166,39 +175,18 @@ export default {
       photoError: ''
     })
 
-    const API_BASE = 'http://localhost:8000'
+    const API_BASE = 'http://localhost:8000/api'
 
-    const handlePhotoUpload = (event) => {
-      const files = Array.from(event.target.files)
-      
-      // Проверяем количество файлов
-      if (files.length > 3) {
-        newPlace.photoError = 'Можно загрузить не более 3 фотографий'
-        newPlace.photoFiles = []
-        if (fileInput.value) {
-          fileInput.value.value = ''
-        }
-        return
+    // Навигация между вкладками
+    const navigateTo = (tab) => {
+      if (tab === 'favorites') {
+        router.push('/favorites')
+      } else {
+        router.push('/catalog')
       }
-
-    const invalidFiles = files.filter(file => {
-        const validTypes = ['image/png', 'image/jpeg', 'image/jpg']
-        return !validTypes.includes(file.type)
-      })
-      
-      if (invalidFiles.length > 0) {
-        newPlace.photoError = 'Допустимые форматы: PNG или JPG'
-        newPlace.photoFiles = []
-        if (fileInput.value) {
-          fileInput.value.value = ''
-        }
-        return
-      }
-      newPlace.photoError = ''
-      newPlace.photoFiles = files
     }
 
-
+    // Функции загрузки данных
     const loadCities = async () => {
       try { 
         const response = await axios.get(`${API_BASE}/places/cities`)
@@ -208,7 +196,6 @@ export default {
       }
     }
 
-    // Загрузка мест
     const loadPlaces = async () => {
       loading.value = true
       try {
@@ -274,8 +261,6 @@ export default {
           formData.append('photos', file)
         })
 
-        console.log('Отправка данных...')
-        
         await axios.post(`${API_BASE}/places`, formData, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -300,6 +285,39 @@ export default {
       }
     }
 
+    // Обработка загрузки фото
+    const handlePhotoUpload = (event) => {
+      const files = Array.from(event.target.files)
+      
+      // Проверяем количество файлов
+      if (files.length > 3) {
+        newPlace.photoError = 'Можно загрузить не более 3 фотографий'
+        newPlace.photoFiles = []
+        if (fileInput.value) {
+          fileInput.value.value = ''
+        }
+        return
+      }
+      
+      // Проверяем типы файлов
+      const invalidFiles = files.filter(file => {
+        const validTypes = ['image/png', 'image/jpeg', 'image/jpg']
+        return !validTypes.includes(file.type)
+      })
+      
+      if (invalidFiles.length > 0) {
+        newPlace.photoError = 'Допустимые форматы: PNG или JPG'
+        newPlace.photoFiles = []
+        if (fileInput.value) {
+          fileInput.value.value = ''
+        }
+        return
+      }
+      
+      newPlace.photoError = ''
+      newPlace.photoFiles = files
+    }
+
     // Функция сброса формы
     const resetNewPlaceForm = () => {
       newPlace.name = ''
@@ -314,16 +332,9 @@ export default {
       }
     }
 
-    // Отмена добавления
-    const cancelAddPlace = () => {
-      showAddForm.value = false
-      resetNewPlaceForm()
-    }
-
     // Просмотр деталей места
     const viewPlaceDetails = (place) => {
       console.log('Просмотр места:', place)
-      // Здесь можно добавить переход на страницу деталей
       alert(`Детали места: ${place.name}\nАдрес: ${place.address}\nРейтинг: ${place.average_rating}`)
     }
 
@@ -352,11 +363,10 @@ export default {
       }
     }
 
-    // Выход из системы
-    const logout = () => {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user_data')
-      window.location.reload() // Перезагружаем страницу для возврата к форме входа
+    // Отмена добавления
+    const cancelAddPlace = () => {
+      showAddForm.value = false
+      resetNewPlaceForm()
     }
 
     // Загружаем данные при монтировании компонента
@@ -378,9 +388,10 @@ export default {
       loadPlaces,
       addNewPlace,
       handlePhotoUpload,
-      cancelAddPlace,
       viewPlaceDetails,
       toggleFavorite,
+      cancelAddPlace,
+      navigateTo,
       logout
     }
   }
