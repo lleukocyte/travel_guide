@@ -1,7 +1,6 @@
 <template>
-  <div class="app-container">
-    <!-- Показываем формы авторизации только если не авторизованы -->
-    <div v-if="!isAuthenticated" class="auth-forms">
+  <div class="auth-container">
+    <div class="auth-forms">
       <div class="toggle">
         <button :class="{ active: mode === 'login' }" @click="switchMode('login')">Вход</button>
         <button :class="{ active: mode === 'register' }" @click="switchMode('register')">Регистрация</button>
@@ -48,62 +47,45 @@
 
       <p v-if="errorMessage" class="message error">{{ errorMessage }}</p>
     </div>
-
-    <!-- Если авторизованы - показываем основной интерфейс -->
-    <div v-else class="main-interface">
-      <router-view></router-view>
-    </div>
   </div>
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, provide } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 
 export default {
-  name: 'App',
+  name: 'AuthApp',
   setup() {
     const mode = ref('login')
     const errorMessage = ref('')
     const loading = ref(false)
-    const isAuthenticated = ref(false)
     const router = useRouter()
     
-    const API_BASE = 'http://localhost:8000'
+    const API_BASE = 'http://localhost:8000/api'
 
     const loginData = reactive({ email: '', password: '' })
     const registerData = reactive({ 
       email: '', username: '', password: '', confirmPassword: '' 
     })
 
-    // Проверка аутентификации
     const checkAuth = () => {
       const token = localStorage.getItem('auth_token')
-      const userData = localStorage.getItem('user_data')
-      
-      if (token && userData) {
+      if (token) {
         try {
           const payload = JSON.parse(atob(token.split('.')[1]))
           const expirationTime = payload.exp * 1000
           const currentTime = Date.now()
           
           if (currentTime < expirationTime) {
-            isAuthenticated.value = true
-            // Если на главной странице - переходим в каталог
-            if (router.currentRoute.value.path === '/') {
-              router.push('/catalog')
-            }
-          } else {
-            // Токен истек
-            logout()
+            router.push('/catalog')
           }
         } catch (error) {
-          console.error('Ошибка проверки токена:', error)
-          logout()
+          // Токен невалиден, остаемся на странице авторизации
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('user_data')
         }
-      } else {
-        isAuthenticated.value = false
       }
     }
 
@@ -138,9 +120,6 @@ export default {
         localStorage.setItem('auth_token', access_token)
         localStorage.setItem('user_data', JSON.stringify({ username }))
         
-        // Устанавливаем аутентификацию
-        isAuthenticated.value = true
-        
         // Переходим в каталог
         router.push('/catalog')
         
@@ -174,7 +153,6 @@ export default {
         
         errorMessage.value = 'Регистрация успешна! Теперь войдите.'
         
-        // Очищаем форму и переключаемся на вход
         Object.assign(registerData, { 
           email: '', username: '', password: '', confirmPassword: '' 
         })
@@ -191,17 +169,6 @@ export default {
       }
     }
 
-    // Выход из системы
-    const logout = () => {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user_data')
-      isAuthenticated.value = false
-      router.push('/')
-    }
-
-    // Предоставляем функцию выхода дочерним компонентам
-    provide('logout', logout)
-
     onMounted(() => {
       checkAuth()
     })
@@ -212,7 +179,6 @@ export default {
       loginData,
       registerData,
       loading,
-      isAuthenticated,
       passwordsMatch,
       isRegisterFormValid,
       switchMode,
@@ -224,15 +190,22 @@ export default {
 </script>
 
 <style scoped>
-.app-container {
+.auth-container {
   width: 100%;
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
 }
 
 .auth-forms {
   max-width: 400px;
-  margin: 50px auto;
+  width: 100%;
   padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
 .toggle {
@@ -255,9 +228,7 @@ export default {
 }
 
 .form {
-  border: 1px solid #ddd;
-  padding: 20px;
-  border-radius: 5px;
+  padding: 20px 0;
 }
 
 .form-group {
@@ -305,10 +276,5 @@ export default {
   padding: 10px;
   background: #f8d7da;
   border-radius: 4px;
-}
-
-.main-interface {
-  width: 100%;
-  min-height: 100vh;
 }
 </style>

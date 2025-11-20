@@ -4,8 +4,9 @@ import os
 import uuid
 import json
 
-from backend.places_crud import PlaceCrud, ReviewCrud, FavoriteCrud
-from backend.places_schemas import PlaceCreate, PlaceRead, ReviewCreate, ReviewRead, FavoriteRead, CityList
+from backend.places_crud import PlaceCrud, ReviewCrud
+from backend.users_crud import UserCrud
+from backend.places_schemas import PlaceCreate, PlaceRead, ReviewCreate, ReviewRead, CityList
 from backend.dependencies import get_current_user
 from backend.database import User
 
@@ -18,20 +19,18 @@ def serialize_place(place) -> dict:
     
     try:
         if place.photos:
-            # Пытаемся распарсить JSON
             if isinstance(place.photos, str):
                 parsed = json.loads(place.photos)
                 if isinstance(parsed, list):
                     photos = parsed
                 else:
-                    photos = [parsed]  # Если одна строка, делаем список
+                    photos = [parsed]
             elif isinstance(place.photos, list):
                 photos = place.photos
     except (json.JSONDecodeError, TypeError) as e:
         print(f"Error parsing photos for place {place.id}: {e}")
         photos = []
     
-    # Фильтруем пустые значения
     photos = [photo for photo in photos if photo]
     
     return {
@@ -41,7 +40,7 @@ def serialize_place(place) -> dict:
         "address": place.address,
         "city": place.city,
         "contacts": place.contacts,
-        "photos": photos,  # Гарантированно список
+        "photos": photos,
         "average_rating": place.average_rating,
         "review_count": 0,
         "created_at": place.created_at,
@@ -49,21 +48,17 @@ def serialize_place(place) -> dict:
     }
 
 async def save_uploaded_files(files: List[UploadFile]) -> List[str]:
-    """Сохраняет загруженные файлы и возвращает список URL"""
     photo_urls = []
     
     for file in files:
-        # Генерируем уникальное имя файла
         file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
         filename = f"{uuid.uuid4()}.{file_extension}"
         file_path = os.path.join(UPLOAD_DIR, filename)
         
-        # Сохраняем файл
         content = await file.read()
         with open(file_path, "wb") as f:
             f.write(content)
         
-        # Сохраняем URL для доступа к файлу
         photo_urls.append(file_path)
     
     return photo_urls
@@ -75,7 +70,7 @@ async def create_place(
     address: str = Form(...),
     city: str = Form(...),
     contacts: str = Form(...),
-    photos: List[UploadFile] = File(...),  # Принимаем несколько файлов
+    photos: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user)
 ):
     try:
@@ -101,7 +96,6 @@ async def get_places(city: Optional[str] = Query(None)):
     result = []
     for place in places:
         place_data = serialize_place(place)
-        # Получаем количество отзывов
         reviews = await ReviewCrud.get_reviews_by_place(place.id)
         place_data["review_count"] = len(reviews)
         result.append(place_data)
@@ -165,57 +159,4 @@ async def get_place_reviews(place_id: int):
             "user_username": user.username if user else "Unknown",
             "created_at": review.created_at
         })
-    return result
-
-@places_router.post("/{place_id}/favorites")
-async def add_to_favorites(
-    place_id: int,
-    current_user: User = Depends(get_current_user)
-):
-    place = await PlaceCrud.get_place_by_id(place_id)
-    if not place:
-        raise HTTPException(status_code=404, detail="Место не найдено")
-    
-    try:
-        await FavoriteCrud.add_favorite(place_id, current_user.id)
-        return {"message": "Место добавлено в избранное"}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@places_router.delete("/{place_id}/favorites")
-async def remove_from_favorites(
-    place_id: int,
-    current_user: User = Depends(get_current_user)
-):
-    success = await FavoriteCrud.remove_favorite(place_id, current_user.id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Место не найдено в избранном")
-    return {"message": "Место удалено из избранного"}
-
-@places_router.get("/{place_id}/favorites/status")
-async def get_favorite_status(
-    place_id: int,
-    current_user: User = Depends(get_current_user)
-):
-    is_fav = await FavoriteCrud.is_favorite(place_id, current_user.id)
-    return {"is_favorite": is_fav}
-
-@places_router.get("/user/favorites", response_model=List[FavoriteRead])
-async def get_user_favorites(current_user: User = Depends(get_current_user)):
-    favorites = await FavoriteCrud.get_user_favorites(current_user.id)
-    
-    result = []
-    for favorite in favorites:
-        place = await PlaceCrud.get_place_by_id(favorite.place_id)
-        if place:
-            place_data = serialize_place(place)
-            reviews = await ReviewCrud.get_reviews_by_place(place.id)
-            place_data["review_count"] = len(reviews)
-            result.append({
-                "id": favorite.id,
-                "place_id": favorite.place_id,
-                "place": place_data,
-                "created_at": favorite.created_at
-            })
-    
     return result

@@ -38,22 +38,21 @@
             <div v-else class="places-grid">
               <div v-for="place in places" :key="place.id" class="place-card">
                 <div class="place-image">
-                  <img v-if="place.photos && place.photos.length > 0" :src="place.photos[0]" :alt="place.name">
+                  <img v-if="place.photos && place.photos.length > 0" :src="'http://localhost:8000/' + place.photos[0]" :alt="place.photos[0]">
                   <div v-else class="no-image">📷</div>
                 </div>
                 <div class="place-content">
                   <h3>{{ place.name }}</h3>
                   <p class="place-city">{{ place.city }}</p>
                   <p class="place-address">{{ place.address }}</p>
-                  <p class="place-description">{{ place.description }}</p>
                   <div class="place-rating">
                     ⭐ {{ place.average_rating?.toFixed(1) || '0.0' }} 
                     <span class="review-count">({{ place.review_count || 0 }} отзывов)</span>
                   </div>
                   <div class="place-actions">
-                    <button @click="viewPlaceDetails(place)" class="btn-details">
+                    <!-- <button @click="viewPlaceDetails(place)" class="btn-details">
                       Подробнее
-                    </button>
+                    </button> -->
                     <button 
                       @click="toggleFavorite(place)" 
                       :class="['btn-favorite', { active: place.is_favorite }]"
@@ -73,9 +72,45 @@
               </button>
             </div>
           </div>
+
           <div v-else-if="selectedTab==='favorites'">
-            <!-- сетка избранного -->
-            <PlacesFavorites />
+            <div v-if="loading" class="loading">Загрузка избранного...</div>
+
+            <!-- Сетка избранных мест -->
+            <div v-else class="places-grid">
+              <div v-for="favorite in userFavorites" :key="favorite.id" class="place-card">
+                <div class="place-image">
+                  <img v-if="favorite.place.photos && favorite.place.photos.length > 0" 
+                       :src="'http://localhost:8000/' + favorite.place.photos[0]" 
+                       :alt="favorite.place.name">
+                  <div v-else class="no-image">📷</div>
+                </div>
+                <div class="place-content">
+                  <h3>{{ favorite.place.name }}</h3>
+                  <p class="place-city">{{ favorite.place.city }}</p>
+                  <p class="place-address">{{ favorite.place.address }}</p>
+                  <div class="place-rating">
+                    ⭐ {{ favorite.place.average_rating?.toFixed(1) || '0.0' }} 
+                    <span class="review-count">({{ favorite.place.review_count || 0 }} отзывов)</span>
+                  </div>
+                  <div class="place-actions">
+                    <!-- <button @click="viewPlaceDetails(favorite.place)" class="btn-details">
+                      Подробнее
+                    </button> -->
+                    <button 
+                      @click="toggleFavorite(favorite.place)" 
+                      class="btn-favorite active"
+                    >
+                      ❤️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          
+            <div v-if="!loading && userFavorites.length === 0" class="empty-state">
+              <p>В избранном пока нет мест</p>
+            </div>
           </div>
         </div>
       </main>
@@ -141,7 +176,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed, inject } from 'vue'
+import { ref, reactive, onMounted, computed} from 'vue'
 import axios from 'axios'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -155,10 +190,10 @@ export default {
     const showAddForm = ref(false)
     const addingPlace = ref(false)
     const fileInput = ref(null)
+    const userFavorites = ref([])
     
     const route = useRoute()
     const router = useRouter()
-    const logout = inject('logout') // Получаем функцию выхода из App.vue
 
     // Определяем активную вкладку на основе текущего маршрута
     const selectedTab = computed(() => {
@@ -176,15 +211,6 @@ export default {
     })
 
     const API_BASE = 'http://localhost:8000/api'
-
-    // Навигация между вкладками
-    const navigateTo = (tab) => {
-      if (tab === 'favorites') {
-        router.push('/favorites')
-      } else {
-        router.push('/catalog')
-      }
-    }
 
     // Функции загрузки данных
     const loadCities = async () => {
@@ -333,10 +359,8 @@ export default {
     }
 
     // Просмотр деталей места
-    const viewPlaceDetails = (place) => {
-      console.log('Просмотр места:', place)
-      alert(`Детали места: ${place.name}\nАдрес: ${place.address}\nРейтинг: ${place.average_rating}`)
-    }
+    // const viewPlaceDetails = (place) => {
+    // }
 
     // Добавление/удаление из избранного
     const toggleFavorite = async (place) => {
@@ -345,21 +369,60 @@ export default {
         alert('Войдите в систему чтобы добавлять в избранное')
         return
       }
-
+    
       try {
         if (place.is_favorite) {
-          await axios.delete(`${API_BASE}/places/${place.id}/favorites`, {
+          // Удалить из избранного
+          await axios.delete(`${API_BASE}/favorites/${place.id}`, {
             headers: { Authorization: `Bearer ${token}` }
           })
           place.is_favorite = false
         } else {
-          await axios.post(`${API_BASE}/places/${place.id}/favorites`, {}, {
+          // Добавить в избранное
+          await axios.post(`${API_BASE}/favorites/${place.id}`, {}, {
             headers: { Authorization: `Bearer ${token}` }
           })
           place.is_favorite = true
         }
+
+        // Если находимся на вкладке избранного, просто перезагружаем список
+        if (selectedTab.value === 'favorites') {
+          await loadFavorites()
+        }
       } catch (error) {
         console.error('Ошибка обновления избранного:', error)
+      }
+    }
+
+    const loadFavorites = async () => {
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        console.log('Пользователь не авторизован')
+        userFavorites.value = []
+        return
+      }
+
+      loading.value = true
+      try {
+        const response = await axios.get(`${API_BASE}/favorites`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        userFavorites.value = response.data
+      } catch (error) {
+        console.error('Ошибка загрузки избранного:', error)
+        userFavorites.value = []
+      } finally {
+        loading.value = false
+      }
+    }
+
+    // Навигация между вкладками
+    const navigateTo = (tab) => {
+      if (tab === 'favorites') {
+        router.push('/favorites')
+        loadFavorites()
+      } else {
+        router.push('/catalog')
       }
     }
 
@@ -368,6 +431,13 @@ export default {
       showAddForm.value = false
       resetNewPlaceForm()
     }
+
+    const logout = () => {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_data')
+      window.location.href = '/' // Полный переход на главную страницу
+    }
+
 
     // Загружаем данные при монтировании компонента
     onMounted(() => {
@@ -385,12 +455,14 @@ export default {
       newPlace,
       selectedTab,
       fileInput,
+      userFavorites,
       loadPlaces,
       addNewPlace,
       handlePhotoUpload,
-      viewPlaceDetails,
+      //viewPlaceDetails,
       toggleFavorite,
       cancelAddPlace,
+      loadFavorites,
       navigateTo,
       logout
     }

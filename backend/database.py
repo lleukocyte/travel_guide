@@ -35,8 +35,8 @@ class User(Model):
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
+    favorite_places: Mapped[List[int]] = mapped_column(JSON, default=list)
     reviews: Mapped[List["Review"]] = relationship("Review", back_populates="user")
-    favorites: Mapped[List["Favorite"]] = relationship("Favorite", back_populates="user")
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, username={self.username})>"
@@ -58,7 +58,6 @@ class Place(Model):
 
     # Relationships
     reviews: Mapped[List["Review"]] = relationship("Review", back_populates="place")
-    favorites: Mapped[List["Favorite"]] = relationship("Favorite", back_populates="place")
 
     def __repr__(self):
         return f"<Place(id={self.id}, name={self.name}, city={self.city})>"
@@ -82,30 +81,12 @@ class Review(Model):
     def __repr__(self):
         return f"<Review(id={self.id}, place_id={self.place_id}, user_id={self.user_id}, rating={self.rating})>"
 
-class Favorite(Model):
-    __tablename__ = "favorites"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    place_id: Mapped[int] = mapped_column(ForeignKey("places.id"))
-    
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-
-    # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="favorites")
-    place: Mapped["Place"] = relationship("Place", back_populates="favorites")
-
-    def __repr__(self):
-        return f"<Favorite(id={self.id}, user_id={self.user_id}, place_id={self.place_id})>"
-
 async def create_tables():
-    """Создание всех таблиц"""
     async with engine.begin() as conn:
         await conn.run_sync(Model.metadata.create_all)
-    print("✅ Все таблицы созданы/проверены")
+    print("Все таблицы созданы/проверены")
 
 async def delete_tables():
-    """Удаление таблиц (только для тестов!)"""
     async with engine.begin() as conn:
         await conn.run_sync(Model.metadata.drop_all)
-    print("🗑️ Таблицы удалены")
+    print("Таблицы удалены")

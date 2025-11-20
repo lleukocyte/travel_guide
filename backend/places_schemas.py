@@ -33,15 +33,6 @@ class ReviewRead(ReviewBase):
     place_id: int
     user_username: str
     created_at: datetime
-
-class FavoriteBase(BaseModel):
-    place_id: int
-
-class FavoriteRead(BaseModel):
-    id: int
-    place_id: int
-    place: PlaceRead
-    created_at: datetime
-
+    
 class CityList(BaseModel):
     cities: List[str]

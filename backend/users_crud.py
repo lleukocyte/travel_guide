@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from backend.database import User, new_session
 from backend.users_schemas import UserCreate
 from backend.security import hash_password
+from typing import List
 
 class UserCrud:
     @classmethod
@@ -39,3 +40,33 @@ class UserCrud:
             except Exception as e:
                 await session.rollback()
                 raise e
+    @classmethod
+    async def add_favorite_place(cls, user_id: int, place_id: int) -> User:
+        async with new_session() as session:
+            user = await cls.get_user_by_id(user_id)
+            if place_id not in user.favorite_places:
+                user.favorite_places.append(place_id)
+                await session.commit()
+            return user
+
+    @classmethod
+    async def remove_favorite_place(cls, user_id: int, place_id: int) -> User:
+        async with new_session() as session:
+            user = await cls.get_user_by_id(user_id)
+            if place_id in user.favorite_places:
+                user.favorite_places.remove(place_id)
+                await session.commit()
+            return user
+
+    @classmethod
+    async def get_favorite_places(cls, user_id: int) -> List[int]:
+        user = await cls.get_user_by_id(user_id)
+        return user.favorite_places
+    
+    @classmethod
+    async def is_favorite_place(cls, user_id: int, place_id: int) -> bool:
+        user = await cls.get_user_by_id(user_id)
+        if not user:
+            return False
+
+        return place_id in user.favorite_places

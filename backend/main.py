@@ -9,28 +9,27 @@ import os
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #await delete_tables()
+    await delete_tables()
     await create_tables()
-    print("✅ База данных готова к работе")
+    print("База данных готова к работе")
     yield
-    print("🔴 Выключение")
+    print("Выключение")
 
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://172.18.43.254:8089",
-        "http://localhost:8089"
+        "http://172.18.43.254:8081",
+        "http://localhost:8081"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Подключаем оба роутера
-app.include_router(user_router)
-app.include_router(places_router)
+app.include_router(user_router, prefix="/api")
+app.include_router(places_router, prefix="/api")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")

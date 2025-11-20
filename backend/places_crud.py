@@ -1,6 +1,6 @@
 from sqlalchemy import select, and_
 from sqlalchemy.exc import IntegrityError
-from backend.database import new_session, User, Place, Review, Favorite
+from backend.database import new_session, User, Place, Review
 from backend.places_schemas import PlaceCreate, ReviewCreate
 import json
 from typing import List, Optional
@@ -50,7 +50,6 @@ class ReviewCrud:
     async def create_review(cls, data: ReviewCreate, user_id: int) -> Review:
         async with new_session() as session:
             try:
-                # Check if user already reviewed this place
                 existing_review = await session.execute(
                     select(Review).where(
                         and_(Review.place_id == data.place_id, Review.user_id == user_id)
@@ -81,63 +80,3 @@ class ReviewCrud:
             query = select(User).where(User.id == user_id)
             result = await session.execute(query)
             return result.scalar_one_or_none()
-
-class FavoriteCrud:
-    @classmethod
-    async def add_favorite(cls, place_id: int, user_id: int) -> Favorite:
-        async with new_session() as session:
-            try:
-                # Check if already favorited
-                existing_fav = await session.execute(
-                    select(Favorite).where(
-                        and_(Favorite.place_id == place_id, Favorite.user_id == user_id)
-                    )
-                )
-                if existing_fav.scalar_one_or_none():
-                    raise ValueError("Место уже в избранном")
-
-                favorite = Favorite(place_id=place_id, user_id=user_id)
-                session.add(favorite)
-                await session.commit()
-                await session.refresh(favorite)
-                return favorite
-            except Exception as e:
-                await session.rollback()
-                raise e
-
-    @classmethod
-    async def remove_favorite(cls, place_id: int, user_id: int) -> bool:
-        async with new_session() as session:
-            try:
-                favorite = await session.execute(
-                    select(Favorite).where(
-                        and_(Favorite.place_id == place_id, Favorite.user_id == user_id)
-                    )
-                )
-                favorite = favorite.scalar_one_or_none()
-                
-                if not favorite:
-                    return False
-                
-                await session.delete(favorite)
-                await session.commit()
-                return True
-            except Exception as e:
-                await session.rollback()
-                raise e
-
-    @classmethod
-    async def get_user_favorites(cls, user_id: int) -> List[Favorite]:
-        async with new_session() as session:
-            query = select(Favorite).where(Favorite.user_id == user_id)
-            result = await session.execute(query)
-            return result.scalars().all()
-
-    @classmethod
-    async def is_favorite(cls, place_id: int, user_id: int) -> bool:
-        async with new_session() as session:
-            query = select(Favorite).where(
-                and_(Favorite.place_id == place_id, Favorite.user_id == user_id)
-            )
-            result = await session.execute(query)
-            return result.scalar_one_or_none() is not None
