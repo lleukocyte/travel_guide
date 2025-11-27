@@ -68,7 +68,7 @@ class Review(Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     place_id: Mapped[int] = mapped_column(ForeignKey("places.id"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    rating: Mapped[int] = mapped_column(Integer)  # 1-5
+    rating: Mapped[int] = mapped_column(Integer)
     comment: Mapped[str] = mapped_column(Text)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

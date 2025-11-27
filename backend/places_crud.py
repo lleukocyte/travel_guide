@@ -73,10 +73,3 @@ class ReviewCrud:
             query = select(Review).where(Review.place_id == place_id)
             result = await session.execute(query)
             return result.scalars().all()
-
-    @classmethod
-    async def get_user_by_id(cls, user_id: int) -> User | None:
-        async with new_session() as session:
-            query = select(User).where(User.id == user_id)
-            result = await session.execute(query)
-            return result.scalar_one_or_none()

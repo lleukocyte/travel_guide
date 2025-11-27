@@ -1,7 +1,6 @@
 <template>
   <div class="places-app">
     <div class="app-container">
-      <!-- Боковая панель слева -->
       <aside class="sidebar">
         <nav class="sidebar-nav">
           <ul>
@@ -12,7 +11,6 @@
         <button @click="logout" class="logout-btn">Выйти</button>
       </aside>
 
-      <!-- Основное содержимое -->
       <main class="main-content">
         <div class="city-selector">
           <label>Город: </label>
@@ -22,39 +20,56 @@
               {{ city }}
             </option>
           </select>
-          
-          <!-- Кнопка добавления места -->
-          <button @click="showAddForm = true" class="add-place-btn">
-            ➕ Добавить место
-          </button>
         </div>
+
+        <!-- <div v-if="selectedCity && !loading" class="map-section">
+          <div class="map-container">
+            <yandex-map
+              :settings="mapSettings"
+              :coords="mapCenter"
+              :zoom="mapZoom"
+              @click="onMapClick"
+              style="width: 100%; height: 400px;"
+              ref="yandexMap"
+            >
+              <ymap-marker
+                v-for="place in filteredPlaces"
+                :key="place.id"
+                :marker-id="place.id"
+                :coords="getPlaceCoords(place)"
+                :hint-content="getPlaceHint(place)"
+                :balloon="getPlaceBalloon(place)"
+                @click="onMarkerClick(place)"
+              />
+            </yandex-map>
+          </div>
+        </div> -->
 
         <div class="content">
           <div v-if="selectedTab==='catalog'">
-            <!-- Загрузка -->
+            <div class="catalog-header">
+              <button @click="showAddForm = true" class="add-place-btn">
+                ➕ Добавить место
+              </button>
+            </div>
             <div v-if="loading" class="loading">Загрузка мест...</div>
             
-            <!-- Сетка мест -->
             <div v-else class="places-grid">
               <div v-for="place in places" :key="place.id" class="place-card">
-                <div class="place-image">
-                  <img v-if="place.photos && place.photos.length > 0" :src="'http://localhost:8000/' + place.photos[0]" :alt="place.photos[0]">
+                <div class="place-image" @click="viewPlaceDetails(place)">
+                  <img v-if="place.photos && place.photos.length > 0" :src="'http://localhost:8000/' + place.photos[0]" :alt="place.name">
                   <div v-else class="no-image">📷</div>
                 </div>
                 <div class="place-content">
-                  <h3>{{ place.name }}</h3>
+                  <h3 class="clickable-area" @click="viewPlaceDetails(place)">{{ place.name }}</h3>
                   <p class="place-city">{{ place.city }}</p>
                   <p class="place-address">{{ place.address }}</p>
                   <div class="place-rating">
-                    ⭐ {{ place.average_rating?.toFixed(1) || '0.0' }} 
-                    <span class="review-count">({{ place.review_count || 0 }} отзывов)</span>
+                    ⭐ {{ place.average_rating?.toFixed(1) || '0.0' }}
                   </div>
                   <div class="place-actions">
-                    <!-- <button @click="viewPlaceDetails(place)" class="btn-details">
-                      Подробнее
-                    </button> -->
                     <button 
-                      @click="toggleFavorite(place)" 
+                      @click.stop="toggleFavorite(place)" 
                       :class="['btn-favorite', { active: place.is_favorite }]"
                     >
                       ❤️
@@ -64,7 +79,6 @@
               </div>
             </div>
 
-            <!-- Состояние пустого списка -->
             <div v-if="!loading && places.length === 0" class="empty-state">
               <p>В выбранном городе пока нет мест</p>
               <button @click="showAddForm = true" class="btn-primary">
@@ -76,30 +90,25 @@
           <div v-else-if="selectedTab==='favorites'">
             <div v-if="loading" class="loading">Загрузка избранного...</div>
 
-            <!-- Сетка избранных мест -->
             <div v-else class="places-grid">
-              <div v-for="favorite in userFavorites" :key="favorite.id" class="place-card">
-                <div class="place-image">
+              <div v-for="favorite in validFavorites" :key="favorite.id" class="place-card">
+                <div class="place-image" @click="viewPlaceDetails(favorite.place)">
                   <img v-if="favorite.place.photos && favorite.place.photos.length > 0" 
                        :src="'http://localhost:8000/' + favorite.place.photos[0]" 
                        :alt="favorite.place.name">
                   <div v-else class="no-image">📷</div>
                 </div>
                 <div class="place-content">
-                  <h3>{{ favorite.place.name }}</h3>
+                  <h3> @click="viewPlaceDetails(place)" class="clickable-title">{{ favorite.place.name }}</h3>
                   <p class="place-city">{{ favorite.place.city }}</p>
                   <p class="place-address">{{ favorite.place.address }}</p>
                   <div class="place-rating">
                     ⭐ {{ favorite.place.average_rating?.toFixed(1) || '0.0' }} 
-                    <span class="review-count">({{ favorite.place.review_count || 0 }} отзывов)</span>
                   </div>
                   <div class="place-actions">
-                    <!-- <button @click="viewPlaceDetails(favorite.place)" class="btn-details">
-                      Подробнее
-                    </button> -->
                     <button 
-                      @click="toggleFavorite(favorite.place)" 
-                      class="btn-favorite active"
+                      @click.stop="toggleFavorite(favorite.place)" 
+                      :class="['btn-favorite', { active: favorite.place.is_favorite }]"
                     >
                       ❤️
                     </button>
@@ -108,7 +117,7 @@
               </div>
             </div>
           
-            <div v-if="!loading && userFavorites.length === 0" class="empty-state">
+            <div v-if="!loading && validFavorites.length === 0" class="empty-state">
               <p>В избранном пока нет мест</p>
             </div>
           </div>
@@ -116,7 +125,6 @@
       </main>
     </div>
 
-     <!-- Модальное окно добавления места -->
     <div v-if="showAddForm" class="modal-overlay">
       <div class="modal-content">
         <h2>Добавить новое место</h2>
@@ -195,9 +203,16 @@ export default {
     const route = useRoute()
     const router = useRouter()
 
-    // Определяем активную вкладку на основе текущего маршрута
     const selectedTab = computed(() => {
       return route.name === 'Favorites' ? 'favorites' : 'catalog'
+    })
+
+    const validFavorites = computed(() => {
+      return userFavorites.value.filter(favorite => 
+        favorite && 
+        favorite.place && 
+        favorite.place.id
+      )
     })
 
     const newPlace = reactive({
@@ -235,12 +250,11 @@ export default {
         
         places.value = response.data
         
-        // Проверяем статус избранного для каждого места
         if (token) {
           for (let place of places.value) {
             try {
               const favResponse = await axios.get(
-                `${API_BASE}/places/${place.id}/favorites/status`,
+                `${API_BASE}/favorites/${place.id}/status`,
                 { headers: { Authorization: `Bearer ${token}` } }
               )
               place.is_favorite = favResponse.data.is_favorite
@@ -256,7 +270,6 @@ export default {
       }
     }
 
-    // Добавление нового места
     const addNewPlace = async () => {
       if (addingPlace.value) return
       addingPlace.value = true
@@ -268,13 +281,11 @@ export default {
           return
         }
 
-        // Проверяем, что загружены фото
         if (newPlace.photoFiles.length === 0) {
           newPlace.photoError = 'Необходимо загрузить хотя бы одну фотографию'
           return
         }
 
-        // Создаем FormData
         const formData = new FormData()
         formData.append('name', newPlace.name)
         formData.append('city', newPlace.city)
@@ -282,7 +293,6 @@ export default {
         formData.append('contacts', newPlace.contacts)
         formData.append('description', newPlace.description)
         
-        // Добавляем каждый файл
         newPlace.photoFiles.forEach(file => {
           formData.append('photos', file)
         })
@@ -294,14 +304,10 @@ export default {
           }
         })
 
-        // Закрываем форму и сбрасываем данные
         showAddForm.value = false
         resetNewPlaceForm()
         
-        // Перезагружаем список мест
         await loadPlaces()
-        
-        alert('Место успешно добавлено!')
 
       } catch (error) {
         console.error('Ошибка добавления места:', error)
@@ -311,11 +317,9 @@ export default {
       }
     }
 
-    // Обработка загрузки фото
     const handlePhotoUpload = (event) => {
       const files = Array.from(event.target.files)
       
-      // Проверяем количество файлов
       if (files.length > 3) {
         newPlace.photoError = 'Можно загрузить не более 3 фотографий'
         newPlace.photoFiles = []
@@ -325,7 +329,6 @@ export default {
         return
       }
       
-      // Проверяем типы файлов
       const invalidFiles = files.filter(file => {
         const validTypes = ['image/png', 'image/jpeg', 'image/jpg']
         return !validTypes.includes(file.type)
@@ -344,7 +347,6 @@ export default {
       newPlace.photoFiles = files
     }
 
-    // Функция сброса формы
     const resetNewPlaceForm = () => {
       newPlace.name = ''
       newPlace.city = ''
@@ -358,11 +360,10 @@ export default {
       }
     }
 
-    // Просмотр деталей места
-    // const viewPlaceDetails = (place) => {
-    // }
+    const viewPlaceDetails = (place) => {
+      router.push(`/place/${place.id}`)
+    }
 
-    // Добавление/удаление из избранного
     const toggleFavorite = async (place) => {
       const token = localStorage.getItem('auth_token')
       if (!token) {
@@ -372,32 +373,38 @@ export default {
     
       try {
         if (place.is_favorite) {
-          // Удалить из избранного
           await axios.delete(`${API_BASE}/favorites/${place.id}`, {
             headers: { Authorization: `Bearer ${token}` }
           })
           place.is_favorite = false
         } else {
-          // Добавить в избранное
           await axios.post(`${API_BASE}/favorites/${place.id}`, {}, {
             headers: { Authorization: `Bearer ${token}` }
           })
           place.is_favorite = true
         }
 
-        // Если находимся на вкладке избранного, просто перезагружаем список
         if (selectedTab.value === 'favorites') {
           await loadFavorites()
         }
       } catch (error) {
-        console.error('Ошибка обновления избранного:', error)
+        let errorMessage = 'Неизвестная ошибка'
+        if (error.response?.data?.detail) {
+          errorMessage = error.response.data.detail
+        } else if (error.response?.data) {
+          errorMessage = JSON.stringify(error.response.data)
+        } else if (error.message) {
+          errorMessage = error.message
+        }
+
+        alert('Ошибка при обновлении избранного: ' + errorMessage)
       }
     }
 
     const loadFavorites = async () => {
       const token = localStorage.getItem('auth_token')
       if (!token) {
-        console.log('Пользователь не авторизован')
+        alert('Пользователь не авторизован')
         userFavorites.value = []
         return
       }
@@ -435,14 +442,142 @@ export default {
     const logout = () => {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user_data')
-      window.location.href = '/' // Полный переход на главную страницу
+      window.location.href = '/'
     }
+    
+    // const mapCenter = ref([55.751244, 37.618423])
+    // const mapZoom = ref(10)
+    // const yandexMap = ref(null)
+    
+    // // Координаты основных городов (можно расширить)
+    // const cityCoordinates = {
+    //   'Москва': [55.7558, 37.6173],
+    //   'Санкт-Петербург': [59.9343, 30.3351],
+    //   'Новосибирск': [55.0084, 82.9357],
+    //   'Екатеринбург': [56.8389, 60.6057],
+    //   'Казань': [55.7963, 49.1083],
+    //   'Нижний Новгород': [56.3269, 44.0059],
+    //   'Челябинск': [55.1644, 61.4368],
+    //   'Самара': [53.1959, 50.1002],
+    //   'Омск': [54.9885, 73.3242],
+    //   'Ростов-на-Дону': [47.2221, 39.7203],
+    //   'Уфа': [54.7351, 55.9587],
+    //   'Красноярск': [56.0153, 92.8932],
+    //   'Воронеж': [51.6720, 39.1843],
+    //   'Пермь': [58.0105, 56.2294],
+    //   'Волгоград': [48.7080, 44.5133]
+    // }
+    
+    // // Вычисляемое свойство для отфильтрованных мест
+    // const filteredPlaces = computed(() => {
+    //   if (!selectedCity.value) return []
+    //   return places.value.filter(place => place.city === selectedCity.value)
+    // })
+    
+    // // Методы для работы с картой
+    // const onCityChange = async () => {
+    //   await loadPlaces()
+      
+    //   if (selectedCity.value) {
+    //     // Центрируем карту на выбранном городе
+    //     const coords = cityCoordinates[selectedCity.value] || cityCoordinates['Москва']
+    //     mapCenter.value = coords
+    //     mapZoom.value = 12
+        
+    //     await nextTick()
+        
+    //     await geocodePlaces()
+    //   }
+    // }
+    
+    // const getPlaceCoords = (place) => {
+    //   // Если у места уже есть координаты, используем их
+    //   if (place.coordinates && place.coordinates.lat && place.coordinates.lon) {
+    //     return [place.coordinates.lat, place.coordinates.lon]
+    //   }
+      
+    //   // Иначе используем координаты города как fallback
+    //   return cityCoordinates[place.city] || cityCoordinates['Москва']
+    // }
+    
+    // const getPlaceHint = (place) => {
+    //   return `
+    //     <div class="map-hint">
+    //       <strong>${place.name}</strong>
+    //       <br>⭐ ${place.average_rating?.toFixed(1) || '0.0'}
+    //     </div>
+    //   `
+    // }
+    
+    // const getPlaceBalloon = (place) => {
+    //   const photo = place.photos && place.photos.length > 0 
+    //     ? `<img src="http://localhost:8000/${place.photos[0]}" alt="${place.name}" class="balloon-photo">`
+    //     : '<div class="no-photo">📷 Нет фото</div>'
+      
+    //   return `
+    //     <div class="map-balloon">
+    //       <div class="balloon-header">
+    //         <h4>${place.name}</h4>
+    //         <div class="rating">⭐ ${place.average_rating?.toFixed(1) || '0.0'}</div>
+    //       </div>
+    //       <div class="balloon-content">
+    //         ${photo}
+    //         <div class="balloon-info">
+    //           <p><strong>Адрес:</strong> ${place.address}</p>
+    //           <p><strong>Город:</strong> ${place.city}</p>
+    //           <p><strong>Отзывы:</strong> ${place.review_count || 0}</p>
+    //         </div>
+    //       </div>
+    //       <div class="balloon-actions">
+    //         <button onclick="window.viewPlaceDetails(${place.id})" class="balloon-btn">
+    //           Подробнее
+    //         </button>
+    //       </div>
+    //     </div>
+    //   `
+    // }
+    
+    // const onMapClick = (e) => {
+    //   console.log('Координаты клика:', e.get('coords'))
+    // }
+    
+    // const onMarkerClick = (place) => {
+    //   viewPlaceDetails(place)
+    // }
+    
+    // // Геокодирование адресов (опционально)
+    // const geocodePlaces = async () => {
+    //   if (!window.ymaps) return
+      
+    //   for (let place of filteredPlaces.value) {
+    //     if (!place.coordinates) {
+    //       try {
+    //         // Геокодируем адрес для получения точных координат
+    //         const result = await window.ymaps.geocode(`${place.city}, ${place.address}`)
+    //         const coords = result.geoObjects.get(0).geometry.getCoordinates()
+            
+    //         // Обновляем координаты места (можно сохранить в БД)
+    //         place.coordinates = {
+    //           lat: coords[0],
+    //           lon: coords[1]
+    //         }
+    //       } catch (error) {
+    //         console.warn(`Не удалось геокодировать: ${place.address}`)
+    //       }
+    //     }
+    //   }
+    // }
 
-
-    // Загружаем данные при монтировании компонента
     onMounted(() => {
+      // window.viewPlaceDetails = (placeId) => {
+      //   const place = places.value.find(p => p.id === placeId)
+      //   if (place) {
+      //     viewPlaceDetails(place)
+      //   }
+      // }
       loadCities()
       loadPlaces()
+      loadFavorites()
     })
 
     return {
@@ -456,15 +591,26 @@ export default {
       selectedTab,
       fileInput,
       userFavorites,
+      validFavorites,
+      // mapCenter,
+      // mapZoom,
+      // yandexMap,
+      // filteredPlaces,
       loadPlaces,
       addNewPlace,
       handlePhotoUpload,
-      //viewPlaceDetails,
+      viewPlaceDetails,
       toggleFavorite,
       cancelAddPlace,
       loadFavorites,
       navigateTo,
-      logout
+      logout,
+      // onCityChange,
+      // getPlaceCoords,
+      // getPlaceHint,
+      // getPlaceBalloon,
+      // onMapClick,
+      // onMarkerClick
     }
   }
 }
@@ -563,6 +709,13 @@ export default {
   border: 1px solid #ddd;
   border-radius: 5px;
   margin-right: auto;
+}
+
+.catalog-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+  padding: 0 20px;
 }
 
 .add-place-btn {
@@ -689,6 +842,19 @@ export default {
 
 .btn-details:hover {
   background: #0056b3;
+}
+
+.clickable-area {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clickable-area:hover {
+  opacity: 0.8;
+}
+
+.place-card {
+  cursor: default;
 }
 
 .btn-favorite {
@@ -819,8 +985,125 @@ export default {
 .btn-cancel:hover {
   background: #5a6268;
 }
+/* 
+.map-section {
+  margin-bottom: 30px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.map-container {
+  height: 400px;
+  background: #f8f9fa;
+}
+
+.map-hint {
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  font-size: 14px;
+  max-width: 200px;
+}
+
+.map-balloon {
+  padding: 15px;
+  max-width: 300px;
+}
+
+.balloon-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.balloon-header h4 {
+  margin: 0;
+  color: #333;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.balloon-header .rating {
+  color: #f39c12;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.balloon-content {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.balloon-photo {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.no-photo {
+  width: 80px;
+  height: 80px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+}
+
+.balloon-info {
+  flex: 1;
+}
+
+.balloon-info p {
+  margin: 5px 0;
+  font-size: 13px;
+  color: #555;
+}
+
+.balloon-info strong {
+  color: #333;
+}
+
+.balloon-actions {
+  text-align: center;
+}
+
+.balloon-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.3s ease;
+}
+
+.balloon-btn:hover {
+  background: #0056b3;
+} */
 
 @media (max-width: 768px) {
+  /* .balloon-content {
+    flex-direction: column;
+  }
+  
+  .balloon-photo,
+  .no-photo {
+    width: 100%;
+    height: 120px;
+  }
+  
+  .map-container {
+    height: 300px;
+  } */
+
   .app-container {
     flex-direction: column;
   }

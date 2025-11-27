@@ -67,7 +67,7 @@ async def get_favorites(current_user: User = Depends(get_current_user)):
         place = await PlaceCrud.get_place_by_id(place_id)
         if place:
             place_data = serialize_place(place)
-            places.append(place_data)
+            places = places + [place_data]
     
     return places
 

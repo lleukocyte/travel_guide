@@ -98,6 +98,11 @@ async def get_places(city: Optional[str] = Query(None)):
         place_data = serialize_place(place)
         reviews = await ReviewCrud.get_reviews_by_place(place.id)
         place_data["review_count"] = len(reviews)
+        place_data["average_rating"] = 0
+        for rev in reviews:
+            place_data["average_rating"] += rev.rating
+        if len(reviews):
+            place_data["average_rating"] /= len(reviews)
         result.append(place_data)
     return result
 
@@ -115,6 +120,11 @@ async def get_place(place_id: int):
     place_data = serialize_place(place)
     reviews = await ReviewCrud.get_reviews_by_place(place_id)
     place_data["review_count"] = len(reviews)
+    place_data["average_rating"] = 0
+    for rev in reviews:
+        place_data["average_rating"] += rev.rating
+    if len(reviews):
+        place_data["average_rating"] /= len(reviews)
     
     return place_data
 
@@ -149,7 +159,7 @@ async def get_place_reviews(place_id: int):
     reviews = await ReviewCrud.get_reviews_by_place(place_id)
     result = []
     for review in reviews:
-        user = await ReviewCrud.get_user_by_id(review.user_id)
+        user = await UserCrud.get_user_by_id(review.user_id)
         result.append({
             "id": review.id,
             "user_id": review.user_id,
