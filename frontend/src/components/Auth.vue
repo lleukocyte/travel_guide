@@ -393,12 +393,10 @@ export default {
 .message.error {
   background-color: #e94253;
   color: rgb(219, 1, 1);
-  border-left: 4px solid #a71d2a;
 }
 
 .message.success {
-  background-color: #46d667;
-  color: rgb(31, 129, 25);
-  border-left: 4px solid #176d2b;
+  background-color: #34a74f;
+  color: rgb(9, 43, 7);
 }
 </style>

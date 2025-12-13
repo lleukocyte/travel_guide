@@ -171,7 +171,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, computed} from 'vue'
 import axios from 'axios'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -243,7 +243,7 @@ export default {
     };
 
     const initMap = async () => {
-      if (!selectedCity.value || mapInitialized.value) return
+      if (!selectedCity.value) return
       
       const ymaps = await loadYandexMaps();
       if (!ymaps || !mapContainer.value) return
@@ -321,14 +321,6 @@ export default {
       }
     };
 
-    // При загрузке мест запускаем геокодирование
-    watch(filteredPlaces, async (newPlaces) => {
-      if (newPlaces.length > 0 && selectedCity.value && !mapInitialized.value) {
-        await nextTick(); // ЖДЁМ, пока v-if создаст контейнер
-        await initMap();
-      }
-    });
-
     // Вспомогательные функции
     const getReviewWord = (count) => {
       if (!count) return 'отзывов'
@@ -401,10 +393,6 @@ export default {
       } finally {
         loading.value = false
       }
-    }
-
-    const onCityChange = () => {
-      loadPlaces()
     }
 
     const addNewPlace = async () => {
@@ -643,13 +631,27 @@ export default {
       })
     }
 
+    const destroyMap = () => {
+      if (map) {
+        map.destroy()
+        map = null
+        mapInitialized.value = false
+      }
+    }
+    
+    const onCityChange = async () => {
+        destroyMap()
+        await loadPlaces()
+        await nextTick()
+        await initMap()
+    }
+
     onMounted(() => {
       setupBalloonHandlers()
       loadCities()
       loadPlaces()
       loadFavorites()
       
-      // Ждем загрузки API Яндекс.Карт
       const checkYmaps = () => {
         if (typeof window.ymaps !== 'undefined') {
           console.log('API Яндекс.Карт загружено, готово к геокодированию')
@@ -692,6 +694,7 @@ export default {
       loadFavorites,
       navigateTo,
       logout,
+      destroyMap,
       onCityChange,
       getPlaceHint,
       getPlaceBalloon,
@@ -713,14 +716,19 @@ export default {
   min-height: 100vh;
 }
 
-/* Боковая панель */
 .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 250px;
+  min-height: 100vh;
+  height: auto;
   background: #2c3e50;
   padding: 20px;
   display: flex;
   flex-direction: column;
   color: white;
+  justify-content: space-between;
 }
 
 .sidebar-nav ul {
@@ -751,7 +759,7 @@ export default {
 }
 
 .logout-btn {
-  margin-top: auto;
+  margin-bottom: 20px;
   background: #e74c3c;
   color: white;
   border: none;
@@ -771,7 +779,7 @@ export default {
   flex: 1;
   padding: 20px;
   background: white;
-  margin: 20px;
+  margin: 20px 20px 20px 270px;
   border-radius: 10px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
