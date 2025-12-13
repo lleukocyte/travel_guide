@@ -1,3 +1,4 @@
+<!-- App.vue -->
 <template>
   <div id="app">
     <!-- <div v-if="debugInfo" style="background: #f0f0f0; padding: 10px; border-bottom: 1px solid #ccc; font-family: monospace;">

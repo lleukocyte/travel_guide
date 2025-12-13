@@ -1,9 +1,12 @@
+#places_crud.py
 from sqlalchemy import select, and_
 from sqlalchemy.exc import IntegrityError
 from backend.database import new_session, User, Place, Review
 from backend.places_schemas import PlaceCreate, ReviewCreate
+from backend.geocoder import geocoder
 import json
-from typing import List, Optional
+from typing import List, Optional, Dict
+import asyncio
 
 class PlaceCrud:
     @classmethod
@@ -13,6 +16,14 @@ class PlaceCrud:
                 place_dict = data.model_dump()
                 place_dict["photos"] = json.dumps(place_dict["photos"])
                 
+                coordinates = await geocoder.geocode_address(data.city, data.address)
+                if coordinates:
+                    place_dict["latitude"] = float(coordinates[0])
+                    place_dict["longitude"] = float(coordinates[1])
+                    print(f"Координаты {data.name}: {place_dict["latitude"]}, {place_dict["longitude"]}")
+                else:
+                    print(f"Не удалось получить координаты для: {data.name}")
+                
                 place = Place(**place_dict)
                 session.add(place)
                 await session.commit()
@@ -21,6 +32,23 @@ class PlaceCrud:
             except Exception as e:
                 await session.rollback()
                 raise e
+    
+    @classmethod
+    async def update_place_coordinates(cls, place_id: int) -> Optional[Dict[str, float]]:
+        async with new_session() as session:
+            place = await cls.get_place_by_id(place_id)
+            if not place:
+                return None
+            
+            coordinates = await geocoder.geocode_address(place.city, place.address)
+            if coordinates:
+                place.latitude = coordinates["lat"]
+                place.longitude = coordinates["lon"]
+                await session.commit()
+                await session.refresh(place)
+                return coordinates
+            
+            return None
 
     @classmethod
     async def get_place_by_id(cls, place_id: int) -> Place | None:

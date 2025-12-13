@@ -1,3 +1,4 @@
+<!-- Places.vue -->
 <template>
   <div class="places-app">
     <div class="app-container">
@@ -14,7 +15,7 @@
       <main class="main-content">
         <div class="city-selector">
           <label>Город: </label>
-          <select v-model="selectedCity" @change="loadPlaces">
+          <select v-model="selectedCity" @change="onCityChange">
             <option value="">Все города</option>
             <option v-for="city in cities" :key="city" :value="city">
               {{ city }}
@@ -22,28 +23,10 @@
           </select>
         </div>
 
-        <!-- <div v-if="selectedCity && !loading" class="map-section">
-          <div class="map-container">
-            <yandex-map
-              :settings="mapSettings"
-              :coords="mapCenter"
-              :zoom="mapZoom"
-              @click="onMapClick"
-              style="width: 100%; height: 400px;"
-              ref="yandexMap"
-            >
-              <ymap-marker
-                v-for="place in filteredPlaces"
-                :key="place.id"
-                :marker-id="place.id"
-                :coords="getPlaceCoords(place)"
-                :hint-content="getPlaceHint(place)"
-                :balloon="getPlaceBalloon(place)"
-                @click="onMarkerClick(place)"
-              />
-            </yandex-map>
-          </div>
-        </div> -->
+        <!-- Карта -->
+        <div v-show="selectedCity && !loading && filteredPlaces.length > 0" class="map-section">
+          <div id="yandex-map" ref="mapContainer" class="map-container"></div>
+        </div>
 
         <div class="content">
           <div v-if="selectedTab==='catalog'">
@@ -57,22 +40,23 @@
             <div v-else class="places-grid">
               <div v-for="place in places" :key="place.id" class="place-card">
                 <div class="place-image" @click="viewPlaceDetails(place)">
-                  <img v-if="place.photos && place.photos.length > 0" :src="'http://localhost:8000/' + place.photos[0]" :alt="place.name">
+                  <img v-if="place.photos && place.photos.length > 0" :src="getImageUrl(place.photos[0])" :alt="place.name" @error="handleImageError">
                   <div v-else class="no-image">📷</div>
                 </div>
                 <div class="place-content">
-                  <h3 class="clickable-area" @click="viewPlaceDetails(place)">{{ place.name }}</h3>
+                  <h3 @click="viewPlaceDetails(place)" class="clickable-title">{{ place.name }}</h3>
                   <p class="place-city">{{ place.city }}</p>
                   <p class="place-address">{{ place.address }}</p>
                   <div class="place-rating">
                     ⭐ {{ place.average_rating?.toFixed(1) || '0.0' }}
+                    <span class="review-count">({{ place.review_count || 0 }} {{ getReviewWord(place.review_count) }})</span>
                   </div>
                   <div class="place-actions">
                     <button 
                       @click.stop="toggleFavorite(place)" 
                       :class="['btn-favorite', { active: place.is_favorite }]"
                     >
-                      ❤️
+                      {{ place.is_favorite ? '❤️' : '🤍' }}
                     </button>
                   </div>
                 </div>
@@ -91,24 +75,26 @@
             <div v-if="loading" class="loading">Загрузка избранного...</div>
 
             <div v-else class="places-grid">
-              <div v-for="favorite in validFavorites" :key="favorite.id" class="place-card">
-                <div class="place-image" @click="viewPlaceDetails(favorite.place)">
-                  <img v-if="favorite.place.photos && favorite.place.photos.length > 0" 
-                       :src="'http://localhost:8000/' + favorite.place.photos[0]" 
-                       :alt="favorite.place.name">
+              <div v-for="favorite in userFavorites" :key="favorite.id" class="place-card">
+                <div class="place-image" @click="viewPlaceDetails(favorite)">
+                  <img v-if="favorite.photos && favorite.photos.length > 0" 
+                       :src="getImageUrl(favorite.photos[0])" 
+                       :alt="favorite.name"
+                       @error="handleImageError">
                   <div v-else class="no-image">📷</div>
                 </div>
                 <div class="place-content">
-                  <h3> @click="viewPlaceDetails(place)" class="clickable-title">{{ favorite.place.name }}</h3>
-                  <p class="place-city">{{ favorite.place.city }}</p>
-                  <p class="place-address">{{ favorite.place.address }}</p>
+                  <h3 @click="viewPlaceDetails(favorite)" class="clickable-title">{{ favorite.name }}</h3>
+                  <p class="place-city">{{ favorite.city }}</p>
+                  <p class="place-address">{{ favorite.address }}</p>
                   <div class="place-rating">
-                    ⭐ {{ favorite.place.average_rating?.toFixed(1) || '0.0' }} 
+                    ⭐ {{ favorite.average_rating?.toFixed(1) || '0.0' }} 
+                    <span class="review-count">({{ favorite.review_count || 0 }} {{ getReviewWord(favorite.review_count) }})</span>
                   </div>
                   <div class="place-actions">
                     <button 
-                      @click.stop="toggleFavorite(favorite.place)" 
-                      :class="['btn-favorite', { active: favorite.place.is_favorite }]"
+                      @click.stop="toggleFavorite(favorite)" 
+                      :class="['btn-favorite', { active: true }]"
                     >
                       ❤️
                     </button>
@@ -117,7 +103,7 @@
               </div>
             </div>
           
-            <div v-if="!loading && validFavorites.length === 0" class="empty-state">
+            <div v-if="!loading && userFavorites.length === 0" class="empty-state">
               <p>В избранном пока нет мест</p>
             </div>
           </div>
@@ -125,6 +111,7 @@
       </main>
     </div>
 
+    <!-- Модальное окно добавления места -->
     <div v-if="showAddForm" class="modal-overlay">
       <div class="modal-content">
         <h2>Добавить новое место</h2>
@@ -184,13 +171,16 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed} from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import axios from 'axios'
 import { useRoute, useRouter } from 'vue-router'
 
 export default {
   name: 'PlacesApp',
   setup() {
+    let map = null;
+    let mapContainer = ref(null);
+    let mapInitialized = ref(false);
     const selectedCity = ref('')
     const loading = ref(false)
     const cities = ref([])
@@ -207,14 +197,6 @@ export default {
       return route.name === 'Favorites' ? 'favorites' : 'catalog'
     })
 
-    const validFavorites = computed(() => {
-      return userFavorites.value.filter(favorite => 
-        favorite && 
-        favorite.place && 
-        favorite.place.id
-      )
-    })
-
     const newPlace = reactive({
       name: '',
       city: '',
@@ -226,6 +208,157 @@ export default {
     })
 
     const API_BASE = 'http://localhost:8000/api'
+    const BACKEND_BASE = 'http://localhost:8000'
+
+    // Вычисляемое свойство для отфильтрованных мест
+    const filteredPlaces = computed(() => {
+      if (!selectedCity.value) return []
+      return places.value.filter(place => place.city === selectedCity.value)
+    })
+
+    const loadYandexMaps = () => {
+      return new Promise((resolve) => {
+        if (window.ymaps) {
+          resolve(window.ymaps);
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = `https://api-maps.yandex.ru/2.1/?apikey=${process.env.GEOCODER_API_KEY}&lang=ru_RU&coordorder=latlong`;
+        script.type = 'text/javascript';
+        
+        script.onload = () => {
+          window.ymaps.ready(() => {
+            resolve(window.ymaps);
+          });
+        };
+        
+        script.onerror = () => {
+          console.error('Ошибка загрузки Яндекс.Карт');
+          resolve(null);
+        };
+        
+        document.head.appendChild(script);
+      });
+    };
+
+    const initMap = async () => {
+      if (!selectedCity.value || mapInitialized.value) return
+      
+      const ymaps = await loadYandexMaps();
+      if (!ymaps || !mapContainer.value) return
+      
+      try {
+        const geocodeResult = await ymaps.geocode(selectedCity.value, { results: 1 });
+        const firstGeoObject = geocodeResult.geoObjects.get(0);
+        let center = [55.751244, 37.618423];
+        
+        if (firstGeoObject) {
+          center = firstGeoObject.geometry.getCoordinates();
+        }
+        
+        map = new ymaps.Map(mapContainer.value, {
+          center: center,
+          zoom: 12,
+          controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
+        });
+        
+        const placesWithCoords = filteredPlaces.value.filter(place => {
+          const hasCoords = place.latitude && place.longitude && 
+                          !isNaN(parseFloat(place.latitude)) && 
+                          !isNaN(parseFloat(place.longitude))          
+          return hasCoords
+        });
+        
+        console.log(`Всего мест: ${filteredPlaces.value.length}, с координатами: ${placesWithCoords.length}`)
+        
+        // Добавляем метки только для мест с координатами
+        placesWithCoords.forEach(place => {
+          const coords = [parseFloat(place.latitude), parseFloat(place.longitude)];
+          
+          const placemark = new ymaps.Placemark(coords, {
+            hintContent: `
+              <div class="map-hint">
+                <strong>${place.name}</strong>
+                <br>⭐ ${place.average_rating?.toFixed(1) || '0.0'}
+                <br>${place.address}
+              </div>
+            `,
+            balloonContent: `
+              <div class="map-balloon">
+                <div class="balloon-header">
+                  <h4>${place.name}</h4>
+                  <div class="rating">⭐ ${place.average_rating?.toFixed(1) || '0.0'}</div>
+                </div>
+                <div class="balloon-content">
+                  ${place.photos && place.photos.length > 0 
+                    ? `<img src="${getImageUrl(place.photos[0])}" alt="${place.name}" class="balloon-photo" onerror="this.style.display='none'">`
+                    : '<div class="no-photo">📷 Нет фото</div>'
+                  }
+                  <div class="balloon-info">
+                    <p><strong>Адрес:</strong> ${place.address}</p>
+                    <p><strong>Город:</strong> ${place.city}</p>
+                    <p><strong>Координаты:</strong> ${place.latitude.toFixed(6)}, ${place.longitude.toFixed(6)}</p>
+                  </div>
+                </div>
+              </div>
+            `
+          }, {
+            preset: 'islands#blueIcon'
+          });
+          
+          placemark.events.add('click', () => {
+            viewPlaceDetails(place);
+          });
+          
+          map.geoObjects.add(placemark);
+        });
+        
+        mapInitialized.value = true;
+        
+      } catch (error) {
+        console.error('Ошибка инициализации карты:', error);
+      }
+    };
+
+    // При загрузке мест запускаем геокодирование
+    watch(filteredPlaces, async (newPlaces) => {
+      if (newPlaces.length > 0 && selectedCity.value && !mapInitialized.value) {
+        await nextTick(); // ЖДЁМ, пока v-if создаст контейнер
+        await initMap();
+      }
+    });
+
+    // Вспомогательные функции
+    const getReviewWord = (count) => {
+      if (!count) return 'отзывов'
+      
+      const lastDigit = count % 10
+      const lastTwoDigits = count % 100
+      
+      if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+        return 'отзывов'
+      }
+      
+      if (lastDigit === 1) {
+        return 'отзыв'
+      }
+      
+      if (lastDigit >= 2 && lastDigit <= 4) {
+        return 'отзыва'
+      }
+      
+      return 'отзывов'
+    }
+
+    const getImageUrl = (photoPath) => {
+      if (!photoPath) return ''
+      return photoPath.startsWith('http') ? photoPath : `${BACKEND_BASE}/${photoPath}`
+    }
+
+    const handleImageError = (event) => {
+      event.target.src = 'https://via.placeholder.com/300x200/cccccc/969696?text=Изображение+не+загружено'
+    }
 
     // Функции загрузки данных
     const loadCities = async () => {
@@ -270,6 +403,10 @@ export default {
       }
     }
 
+    const onCityChange = () => {
+      loadPlaces()
+    }
+
     const addNewPlace = async () => {
       if (addingPlace.value) return
       addingPlace.value = true
@@ -305,6 +442,7 @@ export default {
         })
 
         showAddForm.value = false
+        
         resetNewPlaceForm()
         
         await loadPlaces()
@@ -372,7 +510,13 @@ export default {
       }
     
       try {
-        if (place.is_favorite) {
+        if (selectedTab.value === 'favorites') {
+          await axios.delete(`${API_BASE}/favorites/${place.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          await loadFavorites()
+          return
+        } else if (place.is_favorite) {
           await axios.delete(`${API_BASE}/favorites/${place.id}`, {
             headers: { Authorization: `Bearer ${token}` }
           })
@@ -384,9 +528,6 @@ export default {
           place.is_favorite = true
         }
 
-        if (selectedTab.value === 'favorites') {
-          await loadFavorites()
-        }
       } catch (error) {
         let errorMessage = 'Неизвестная ошибка'
         if (error.response?.data?.detail) {
@@ -404,7 +545,6 @@ export default {
     const loadFavorites = async () => {
       const token = localStorage.getItem('auth_token')
       if (!token) {
-        alert('Пользователь не авторизован')
         userFavorites.value = []
         return
       }
@@ -433,7 +573,6 @@ export default {
       }
     }
 
-    // Отмена добавления
     const cancelAddPlace = () => {
       showAddForm.value = false
       resetNewPlaceForm()
@@ -445,140 +584,88 @@ export default {
       window.location.href = '/'
     }
     
-    // const mapCenter = ref([55.751244, 37.618423])
-    // const mapZoom = ref(10)
-    // const yandexMap = ref(null)
+    // Методы для работы с картой
+    const getPlaceHint = (place) => {
+      return `
+        <div class="map-hint">
+          <strong>${place.name}</strong>
+          <br>⭐ ${place.average_rating?.toFixed(1) || '0.0'}
+        </div>
+      `
+    }
     
-    // // Координаты основных городов (можно расширить)
-    // const cityCoordinates = {
-    //   'Москва': [55.7558, 37.6173],
-    //   'Санкт-Петербург': [59.9343, 30.3351],
-    //   'Новосибирск': [55.0084, 82.9357],
-    //   'Екатеринбург': [56.8389, 60.6057],
-    //   'Казань': [55.7963, 49.1083],
-    //   'Нижний Новгород': [56.3269, 44.0059],
-    //   'Челябинск': [55.1644, 61.4368],
-    //   'Самара': [53.1959, 50.1002],
-    //   'Омск': [54.9885, 73.3242],
-    //   'Ростов-на-Дону': [47.2221, 39.7203],
-    //   'Уфа': [54.7351, 55.9587],
-    //   'Красноярск': [56.0153, 92.8932],
-    //   'Воронеж': [51.6720, 39.1843],
-    //   'Пермь': [58.0105, 56.2294],
-    //   'Волгоград': [48.7080, 44.5133]
-    // }
-    
-    // // Вычисляемое свойство для отфильтрованных мест
-    // const filteredPlaces = computed(() => {
-    //   if (!selectedCity.value) return []
-    //   return places.value.filter(place => place.city === selectedCity.value)
-    // })
-    
-    // // Методы для работы с картой
-    // const onCityChange = async () => {
-    //   await loadPlaces()
+    const getPlaceBalloon = (place) => {
+      const photo = place.photos && place.photos.length > 0 
+        ? `<img src="${getImageUrl(place.photos[0])}" alt="${place.name}" class="balloon-photo" onerror="this.style.display='none'">`
+        : '<div class="no-photo">📷 Нет фото</div>'
       
-    //   if (selectedCity.value) {
-    //     // Центрируем карту на выбранном городе
-    //     const coords = cityCoordinates[selectedCity.value] || cityCoordinates['Москва']
-    //     mapCenter.value = coords
-    //     mapZoom.value = 12
-        
-    //     await nextTick()
-        
-    //     await geocodePlaces()
-    //   }
-    // }
+      return `
+        <div class="map-balloon">
+          <div class="balloon-header">
+            <h4>${place.name}</h4>
+            <div class="rating">⭐ ${place.average_rating?.toFixed(1) || '0.0'}</div>
+          </div>
+          <div class="balloon-content">
+            ${photo}
+            <div class="balloon-info">
+              <p><strong>Адрес:</strong> ${place.address}</p>
+              <p><strong>Город:</strong> ${place.city}</p>
+              <p><strong>Отзывы:</strong> ${place.review_count || 0}</p>
+            </div>
+          </div>
+          <div class="balloon-actions">
+            <button class="balloon-btn" data-place-id="${place.id}">
+              Подробнее
+            </button>
+          </div>
+        </div>
+      `
+    }
     
-    // const getPlaceCoords = (place) => {
-    //   // Если у места уже есть координаты, используем их
-    //   if (place.coordinates && place.coordinates.lat && place.coordinates.lon) {
-    //     return [place.coordinates.lat, place.coordinates.lon]
-    //   }
-      
-    //   // Иначе используем координаты города как fallback
-    //   return cityCoordinates[place.city] || cityCoordinates['Москва']
-    // }
+    const onMapClick = (e) => {
+      console.log('Координаты клика:', e.get('coords'))
+    }
     
-    // const getPlaceHint = (place) => {
-    //   return `
-    //     <div class="map-hint">
-    //       <strong>${place.name}</strong>
-    //       <br>⭐ ${place.average_rating?.toFixed(1) || '0.0'}
-    //     </div>
-    //   `
-    // }
+    const onMarkerClick = (place) => {
+      viewPlaceDetails(place)
+    }
     
-    // const getPlaceBalloon = (place) => {
-    //   const photo = place.photos && place.photos.length > 0 
-    //     ? `<img src="http://localhost:8000/${place.photos[0]}" alt="${place.name}" class="balloon-photo">`
-    //     : '<div class="no-photo">📷 Нет фото</div>'
-      
-    //   return `
-    //     <div class="map-balloon">
-    //       <div class="balloon-header">
-    //         <h4>${place.name}</h4>
-    //         <div class="rating">⭐ ${place.average_rating?.toFixed(1) || '0.0'}</div>
-    //       </div>
-    //       <div class="balloon-content">
-    //         ${photo}
-    //         <div class="balloon-info">
-    //           <p><strong>Адрес:</strong> ${place.address}</p>
-    //           <p><strong>Город:</strong> ${place.city}</p>
-    //           <p><strong>Отзывы:</strong> ${place.review_count || 0}</p>
-    //         </div>
-    //       </div>
-    //       <div class="balloon-actions">
-    //         <button onclick="window.viewPlaceDetails(${place.id})" class="balloon-btn">
-    //           Подробнее
-    //         </button>
-    //       </div>
-    //     </div>
-    //   `
-    // }
-    
-    // const onMapClick = (e) => {
-    //   console.log('Координаты клика:', e.get('coords'))
-    // }
-    
-    // const onMarkerClick = (place) => {
-    //   viewPlaceDetails(place)
-    // }
-    
-    // // Геокодирование адресов (опционально)
-    // const geocodePlaces = async () => {
-    //   if (!window.ymaps) return
-      
-    //   for (let place of filteredPlaces.value) {
-    //     if (!place.coordinates) {
-    //       try {
-    //         // Геокодируем адрес для получения точных координат
-    //         const result = await window.ymaps.geocode(`${place.city}, ${place.address}`)
-    //         const coords = result.geoObjects.get(0).geometry.getCoordinates()
-            
-    //         // Обновляем координаты места (можно сохранить в БД)
-    //         place.coordinates = {
-    //           lat: coords[0],
-    //           lon: coords[1]
-    //         }
-    //       } catch (error) {
-    //         console.warn(`Не удалось геокодировать: ${place.address}`)
-    //       }
-    //     }
-    //   }
-    // }
+    // Обработчик для кнопок в балунах
+    const setupBalloonHandlers = () => {
+      document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('balloon-btn')) {
+          const placeId = parseInt(e.target.getAttribute('data-place-id'))
+          const place = places.value.find(p => p.id === placeId)
+          if (place) {
+            viewPlaceDetails(place)
+          }
+        }
+      })
+    }
 
     onMounted(() => {
-      // window.viewPlaceDetails = (placeId) => {
-      //   const place = places.value.find(p => p.id === placeId)
-      //   if (place) {
-      //     viewPlaceDetails(place)
-      //   }
-      // }
+      setupBalloonHandlers()
       loadCities()
       loadPlaces()
       loadFavorites()
+      
+      // Ждем загрузки API Яндекс.Карт
+      const checkYmaps = () => {
+        if (typeof window.ymaps !== 'undefined') {
+          console.log('API Яндекс.Карт загружено, готово к геокодированию')
+        } else {
+          setTimeout(checkYmaps, 100)
+        }
+      }
+      checkYmaps()
     })
+
+    onUnmounted(() => {
+      if (map) {
+        map.destroy();
+      }
+      window.removeEventListener('viewPlace', () => {});
+    });
 
     return {
       selectedCity,
@@ -591,11 +678,11 @@ export default {
       selectedTab,
       fileInput,
       userFavorites,
-      validFavorites,
-      // mapCenter,
-      // mapZoom,
-      // yandexMap,
-      // filteredPlaces,
+      mapContainer,
+      filteredPlaces,
+      getReviewWord,
+      getImageUrl,
+      handleImageError,
       loadPlaces,
       addNewPlace,
       handlePhotoUpload,
@@ -605,12 +692,11 @@ export default {
       loadFavorites,
       navigateTo,
       logout,
-      // onCityChange,
-      // getPlaceCoords,
-      // getPlaceHint,
-      // getPlaceBalloon,
-      // onMapClick,
-      // onMarkerClick
+      onCityChange,
+      getPlaceHint,
+      getPlaceBalloon,
+      onMapClick,
+      onMarkerClick
     }
   }
 }
@@ -985,7 +1071,7 @@ export default {
 .btn-cancel:hover {
   background: #5a6268;
 }
-/* 
+
 .map-section {
   margin-bottom: 30px;
   border-radius: 10px;
@@ -1087,10 +1173,10 @@ export default {
 
 .balloon-btn:hover {
   background: #0056b3;
-} */
+} 
 
 @media (max-width: 768px) {
-  /* .balloon-content {
+  .balloon-content {
     flex-direction: column;
   }
   
@@ -1102,7 +1188,7 @@ export default {
   
   .map-container {
     height: 300px;
-  } */
+  }
 
   .app-container {
     flex-direction: column;

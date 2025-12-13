@@ -1,3 +1,4 @@
+<!-- Auth.vue -->
 <template>
   <div class="auth-container">
     <div class="auth-forms">
@@ -31,7 +32,27 @@
         </div>
         <div class="form-group">
           <label>Пароль</label>
-          <input type="password" v-model="registerData.password" placeholder="Не менее 6 символов" required />
+          <input 
+            type="password" 
+            v-model="registerData.password" 
+            placeholder="Не менее 6 символов" 
+            required 
+          />
+
+          <ul class="password-rules">
+            <li :class="{ ok: passwordLengthOk }">
+              <span>{{ passwordLengthOk ? "✔" : "✖" }}</span>
+              Минимум 6 символов
+            </li>
+            <li :class="{ ok: passwordLowerOk }">
+              <span>{{ passwordLowerOk ? "✔" : "✖" }}</span>
+              Есть строчная буква (a–z)
+            </li>
+            <li :class="{ ok: passwordUpperOk }">
+              <span>{{ passwordUpperOk ? "✔" : "✖" }}</span>
+              Есть заглавная буква (A–Z)
+            </li>
+          </ul>
         </div>
         <div class="form-group">
           <label>Подтвердите пароль</label>
@@ -45,7 +66,7 @@
         </button>
       </form>
 
-      <p v-if="errorMessage" class="message error">{{ errorMessage }}</p>
+      <p v-if="message.text" :class="['message', message.type]">{{ message.text }}</p>
     </div>
   </div>
 </template>
@@ -59,7 +80,7 @@ export default {
   name: 'AuthApp',
   setup() {
     const mode = ref('login')
-    const errorMessage = ref('')
+    const message = ref({ text: '', type: '' })
     const loading = ref(false)
     const router = useRouter()
     
@@ -69,6 +90,10 @@ export default {
     const registerData = reactive({ 
       email: '', username: '', password: '', confirmPassword: '' 
     })
+
+    const passwordLengthOk = computed(() => registerData.password.length >= 6)
+    const passwordLowerOk = computed(() => /[a-z]/.test(registerData.password))
+    const passwordUpperOk = computed(() => /[A-Z]/.test(registerData.password))
 
     const checkAuth = () => {
       const token = localStorage.getItem('auth_token')
@@ -82,7 +107,6 @@ export default {
             router.push('/catalog')
           }
         } catch (error) {
-          // Токен невалиден, остаемся на странице авторизации
           localStorage.removeItem('auth_token')
           localStorage.removeItem('user_data')
         }
@@ -93,45 +117,53 @@ export default {
       registerData.password === registerData.confirmPassword
     )
 
+    const passwordValid = computed(() =>
+      passwordLengthOk.value &&
+      passwordLowerOk.value &&
+      passwordUpperOk.value
+    )
+
     const isRegisterFormValid = computed(() => 
       registerData.email && 
       registerData.username && 
-      registerData.password && 
       passwordsMatch.value &&
-      registerData.password.length >= 6
+      passwordValid.value
     )
 
     const switchMode = (newMode) => {
       mode.value = newMode
-      errorMessage.value = ''
+      message.value = { text: '', type: '' }
     }
 
     const login = async () => {
       if (loading.value) return
       
       loading.value = true
-      errorMessage.value = ''
+      message.value = { text: '', type: '' }
       
       try {
         const response = await axios.post(`${API_BASE}/login`, loginData)
         const { access_token, username } = response.data
         
-        // Сохраняем токен
         localStorage.setItem('auth_token', access_token)
         localStorage.setItem('user_data', JSON.stringify({ username }))
         
-        // Переходим в каталог
         router.push('/catalog')
         
-        // Очищаем форму
         Object.assign(loginData, { email: '', password: '' })
         
       } catch (error) {
         console.error('Ошибка входа:', error)
         if (error.response?.status === 401 || error.response?.status === 403) {
-          errorMessage.value = 'Неверный email или пароль'
+          message.value = { 
+            text: 'Неверный email или пароль', 
+            type: 'error' 
+          }
         } else {
-          errorMessage.value = 'Ошибка входа. Попробуйте позже.'
+          message.value = { 
+            text: 'Ошибка входа. Попробуйте позже.', 
+            type: 'error' 
+          }
         }
       } finally {
         loading.value = false
@@ -140,9 +172,18 @@ export default {
 
     const register = async () => {
       if (loading.value) return
+
+      if (!passwordValid.value) {
+        message.value = { 
+          text: "Пароль не соответствует требованиям", 
+          type: 'error' 
+        }
+        loading.value = false
+        return
+      }
       
       loading.value = true
-      errorMessage.value = ''
+      message.value = { text: '', type: '' }
       
       try {
         await axios.post(`${API_BASE}/register`, {
@@ -151,18 +192,30 @@ export default {
           password: registerData.password
         })
         
-        errorMessage.value = 'Регистрация успешна! Теперь войдите.'
+        message.value = { 
+          text: 'Регистрация успешна! Теперь войдите.', 
+          type: 'success' 
+        }
         
         Object.assign(registerData, { 
           email: '', username: '', password: '', confirmPassword: '' 
         })
-        mode.value = 'login'
+        
+        setTimeout(() => {
+          mode.value = 'login'
+        }, 2000)
         
       } catch (error) {
         if (error.response?.status === 400) {
-          errorMessage.value = error.response.data.detail || 'Ошибка регистрации'
+          message.value = { 
+            text: error.response.data.detail || 'Ошибка регистрации', 
+            type: 'error' 
+          }
         } else {
-          errorMessage.value = 'Ошибка регистрации. Попробуйте позже.'
+          message.value = { 
+            text: 'Ошибка регистрации. Попробуйте позже.', 
+            type: 'error' 
+          }
         }
       } finally {
         loading.value = false
@@ -175,12 +228,16 @@ export default {
 
     return {
       mode,
-      errorMessage,
+      message,
       loginData,
       registerData,
       loading,
       passwordsMatch,
       isRegisterFormValid,
+      passwordLengthOk,
+      passwordLowerOk,
+      passwordUpperOk,
+      passwordValid,
       switchMode,
       login,
       register
@@ -211,20 +268,28 @@ export default {
 .toggle {
   display: flex;
   margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
 }
 
 .toggle button {
   flex: 1;
-  padding: 10px;
+  padding: 12px;
   border: none;
   background: none;
   cursor: pointer;
   font-weight: bold;
+  font-size: 16px;
+  transition: all 0.3s;
 }
 
 .toggle button.active {
   background: #007bff;
   color: white;
+  border-radius: 4px;
+}
+
+.toggle button:not(.active):hover {
+  background: #f0f0f0;
 }
 
 .form {
@@ -232,36 +297,78 @@ export default {
 }
 
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
 }
 
 .form-group input {
   width: 100%;
-  padding: 8px;
+  padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
+  font-size: 14px;
+  transition: border 0.3s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+
+.password-rules {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.password-rules li {
+  color: #dc3545;
+  margin-bottom: 4px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  transition: color 0.3s;
+}
+
+.password-rules li.ok {
+  color: #28a745;
+}
+
+.password-rules li span {
+  font-weight: bold;
+  font-size: 12px;
 }
 
 .error-text {
   color: #dc3545;
   font-size: 12px;
   margin-top: 5px;
+  font-weight: 500;
 }
 
 .submit-btn {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   background: #007bff;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: background 0.3s;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #0056b3;
 }
 
 .submit-btn:disabled {
@@ -269,12 +376,29 @@ export default {
   cursor: not-allowed;
 }
 
-.message.error {
-  color: #dc3545;
-  text-align: center;
-  margin-top: 15px;
-  padding: 10px;
-  background: #f8d7da;
+.message {
+  margin-top: 20px;
+  padding: 12px 16px;
   border-radius: 4px;
+  font-weight: 500;
+  text-align: center;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.message.error {
+  background-color: #e94253;
+  color: rgb(219, 1, 1);
+  border-left: 4px solid #a71d2a;
+}
+
+.message.success {
+  background-color: #46d667;
+  color: rgb(31, 129, 25);
+  border-left: 4px solid #176d2b;
 }
 </style>

@@ -1,3 +1,4 @@
+# database.py
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy import String, DateTime, Boolean, Text, ForeignKey, Integer, Float, JSON
@@ -56,6 +57,9 @@ class Place(Model):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     # Relationships
     reviews: Mapped[List["Review"]] = relationship("Review", back_populates="place")
 
@@ -84,7 +88,7 @@ class Review(Model):
 async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Model.metadata.create_all)
-    print("Все таблицы созданы/проверены")
+    print("Все таблицы созданы")
 
 async def delete_tables():
     async with engine.begin() as conn:

@@ -1,6 +1,8 @@
+#user_router.py
 from typing import Annotated
 from fastapi import APIRouter, HTTPException, Depends
 from backend.users_crud import UserCrud
+from backend.places_crud import ReviewCrud
 from backend.security import create_jwt_token, verify_password
 from backend.users_schemas import UserCreate, UserRead
 from backend.database import new_session, User
@@ -67,7 +69,14 @@ async def get_favorites(current_user: User = Depends(get_current_user)):
         place = await PlaceCrud.get_place_by_id(place_id)
         if place:
             place_data = serialize_place(place)
-            places = places + [place_data]
+            reviews = await ReviewCrud.get_reviews_by_place(place_id)
+            place_data["review_count"] = len(reviews)
+            place_data["average_rating"] = 0
+            for rev in reviews:
+                place_data["average_rating"] += rev.rating
+            if len(reviews):
+                place_data["average_rating"] /= len(reviews)
+            places.append(place_data)
     
     return places
 

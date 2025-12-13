@@ -1,3 +1,4 @@
+<!-- Place_details.vue -->
 <template>
   <div class="place-details">
     <!-- Навигация -->

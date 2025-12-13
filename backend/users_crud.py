@@ -1,3 +1,4 @@
+# user_crud.py
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from backend.database import User, new_session
@@ -54,10 +55,6 @@ class UserCrud:
                 user.favorite_places = user.favorite_places + [place_id]
                 await session.commit()
                 await session.refresh(user)
-            # print("USER:")
-            # print(user.email)
-            # print(place_id)
-            # print(f"{user.favorite_places}")
             return user
 
     @classmethod

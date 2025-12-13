@@ -1,3 +1,4 @@
+# places_schemas.py
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -17,6 +18,8 @@ class PlaceRead(PlaceBase):
     photos: List[str]
     average_rating: float
     review_count: int
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 

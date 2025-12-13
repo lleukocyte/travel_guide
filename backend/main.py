@@ -1,3 +1,4 @@
+# main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.users_router import user_router
@@ -20,8 +21,8 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://172.18.43.254:8092",
-        "http://localhost:8092"
+        "http://172.18.43.254:8090",
+        "http://localhost:8090"
     ],
     allow_credentials=True,
     allow_methods=["*"],

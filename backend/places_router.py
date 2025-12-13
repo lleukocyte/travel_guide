@@ -1,14 +1,17 @@
+#places_router.py
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, Form
 from typing import List, Optional
 import os
 import uuid
 import json
+import asyncio
 
 from backend.places_crud import PlaceCrud, ReviewCrud
 from backend.users_crud import UserCrud
 from backend.places_schemas import PlaceCreate, PlaceRead, ReviewCreate, ReviewRead, CityList
 from backend.dependencies import get_current_user
-from backend.database import User
+from backend.database import User, new_session
+from backend.geocoder import geocoder
 
 places_router = APIRouter(prefix="/places", tags=["places"])
 UPLOAD_DIR = "static/uploads"
@@ -32,7 +35,7 @@ def serialize_place(place) -> dict:
         photos = []
     
     photos = [photo for photo in photos if photo]
-    
+
     return {
         "id": place.id,
         "name": place.name,
@@ -41,6 +44,8 @@ def serialize_place(place) -> dict:
         "city": place.city,
         "contacts": place.contacts,
         "photos": photos,
+        "latitude": place.latitude,
+        "longitude": place.longitude,
         "average_rating": place.average_rating,
         "review_count": 0,
         "created_at": place.created_at,
@@ -170,3 +175,59 @@ async def get_place_reviews(place_id: int):
             "created_at": review.created_at
         })
     return result
+
+@places_router.post("/geocode/address")
+async def geocode_address(city: str = Form(...), address: str = Form(...)):
+    try:
+        coordinates = asyncio.run(geocoder.geocode_address(city, address))
+        if coordinates:
+            return {
+                "success": True,
+                "coordinates": coordinates,
+                "message": f"Координаты найдены для {city}, {address}"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Не удалось найти координаты для указанного адреса"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка геокодирования: {str(e)}")
+    
+@places_router.post("/{place_id}/geocode")
+async def geocode_place(place_id: int):
+    place = await PlaceCrud.get_place_by_id(place_id)
+    if not place:
+        raise HTTPException(status_code=404, detail="Место не найдено")
+    
+    coordinates = await PlaceCrud.update_place_coordinates(place_id)
+    if coordinates:
+        return {
+            "success": True,
+            "place_id": place_id,
+            "coordinates": coordinates,
+            "message": "Координаты обновлены"
+        }
+    else:
+        return {
+            "success": False,
+            "message": "Не удалось получить координаты для этого адреса"
+        }
+
+@places_router.post("/{place_id}/coordinates")
+async def save_place_coordinates(
+    place_id: int,
+    data: dict,
+    current_user: User = Depends(get_current_user)
+):
+    place = await PlaceCrud.get_place_by_id(place_id)
+    if not place:
+        raise HTTPException(status_code=404, detail="Место не найдено")
+    
+    async with new_session() as session:
+        place.latitude = data.get("latitude")
+        place.longitude = data.get("longitude")
+        await session.commit()
+        await session.refresh(place)
+        
+        return {"success": True, "message": "Координаты сохранены"}
