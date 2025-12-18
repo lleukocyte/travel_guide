@@ -1,4 +1,3 @@
-#geocoder.py
 import asyncio
 import os
 from typing import Optional, Tuple, Dict
@@ -54,7 +53,4 @@ class YandexGeocoder:
             print(f"Ошибка при геокодировании {full_address}: {str(e)}")
             return None
     
-    async def geocode_city(self, city: str) -> Optional[Dict[str, float]]:
-        return await self.geocode_address(city, "")
-
 geocoder = YandexGeocoder(YANDEX_GEOCODER_API_KEY)

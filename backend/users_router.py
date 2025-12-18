@@ -1,4 +1,3 @@
-#user_router.py
 from typing import Annotated
 from fastapi import APIRouter, HTTPException, Depends
 from backend.users_crud import UserCrud
@@ -32,7 +31,7 @@ async def login(data: UserRead):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not verify_password(user.password_hash, data.password):
         raise HTTPException(status_code=403, detail="Invalid credentials")
-    token = create_jwt_token({"sub": user.email, "user_id": user.id})
+    token = create_jwt_token({"email": user.email, "user_id": user.id})
     return {"access_token": token, "token_type": "bearer"}
 
 @user_router.post("/favorites/{place_id}")

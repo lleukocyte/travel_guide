@@ -1,4 +1,3 @@
-# dependencies.py
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from backend.users_crud import UserCrud
@@ -15,7 +14,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             detail="Invalid or expired token"
         )
     
-    user = await UserCrud.get_user_by_email(payload.get("sub"))
+    user = await UserCrud.get_user_by_email(payload.get("email"))
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

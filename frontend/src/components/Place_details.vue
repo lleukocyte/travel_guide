@@ -1,7 +1,5 @@
-<!-- Place_details.vue -->
 <template>
   <div class="place-details">
-    <!-- Навигация -->
     <nav class="details-nav">
       <button @click="$router.back()" class="back-btn">← Назад</button>
       <button @click="$router.push('/catalog')" class="nav-btn">Каталог</button>
@@ -12,7 +10,6 @@
     <div v-if="loading" class="loading">Загрузка...</div>
     
     <div v-else-if="place" class="place-content">
-      <!-- Галерея фотографий -->
       <div class="gallery-section">
         <div class="gallery">
           <div class="main-image">
@@ -48,13 +45,12 @@
               :class="['thumbnail', { active: currentImageIndex === index }]"
               @click="currentImageIndex = index"
             >
-              <img :src="getFullImageUrl(photo)" :alt="`Фото ${index + 1}`">
+              <img :src="getFullImagePath(photo)" :alt="`Фото ${index + 1}`">
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Информация о месте -->
       <div class="info-section">
         <div class="place-header">
           <h1>{{ place.name }}</h1>
@@ -86,7 +82,6 @@
           <p>{{ place.description }}</p>
         </div>
 
-        <!-- Отзывы -->
         <div class="reviews-section">
           <div class="reviews-header">
             <h2>Отзывы</h2>
@@ -205,24 +200,20 @@ export default {
       comment: ''
     })
 
-    // Текущее изображение в галерее
     const currentImage = computed(() => {
       if (!place.value || !place.value.photos.length) return ''
-      return getFullImageUrl(place.value.photos[currentImageIndex.value])
+      return getFullImagePath(place.value.photos[currentImageIndex.value])
     })
 
-    // Получить полный URL изображения
-    const getFullImageUrl = (photoPath) => {
+    const getFullImagePath = (photoPath) => {
       return BACKEND_BASE + photoPath
     }
 
-    // Обработка ошибок загрузки изображения
     const handleImageError = (event) => {
       console.error('Ошибка загрузки изображения:', event.target.src)
       event.target.src = 'https://via.placeholder.com/600x400/cccccc/969696?text=Изображение+не+загружено'
     }
 
-    // Навигация по галерее
     const nextImage = () => {
       if (currentImageIndex.value < place.value.photos.length - 1) {
         currentImageIndex.value++
@@ -235,27 +226,21 @@ export default {
       }
     }
 
-    // Проверка аутентификации
     const isAuthenticated = computed(() => {
       return !!localStorage.getItem('auth_token')
     })
 
-    // Загрузка данных места
     const loadPlace = async () => {
       loading.value = true
       try {
         const token = localStorage.getItem('auth_token')
         const headers = token ? { Authorization: `Bearer ${token}` } : {}
         
-        // Загружаем данные места
         const placeResponse = await axios.get(`${API_BASE}/places/${placeId}`, { headers })
         place.value = placeResponse.data
 
-        // Загружаем отзывы
         const reviewsResponse = await axios.get(`${API_BASE}/places/${placeId}/reviews`)
         reviews.value = reviewsResponse.data
-
-        // Проверяем статус избранного если пользователь авторизован
         if (token) {
           try {
             const favResponse = await axios.get(
@@ -276,7 +261,6 @@ export default {
       }
     }
 
-    // Добавление/удаление из избранного
     const toggleFavorite = async () => {
       const token = localStorage.getItem('auth_token')
       if (!token) {
@@ -301,7 +285,6 @@ export default {
       }
     }
 
-    // Добавление отзыва
     const submitReview = async () => {
       if (!isAuthenticated.value) {
         alert('Войдите в систему чтобы оставлять отзывы')
@@ -329,21 +312,23 @@ export default {
           headers: { Authorization: `Bearer ${token}` }
         })
       
-        // Сбрасываем форму и обновляем отзывы
         newReview.rating = 0
         newReview.comment = ''
         showReviewForm.value = false
 
-        // Перезагружаем отзывы
         const reviewsResponse = await axios.get(`${API_BASE}/places/${placeId}/reviews`)
         reviews.value = reviewsResponse.data
+
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        
+        const placeResponse = await axios.get(`${API_BASE}/places/${placeId}`, { headers })
+        place.value = placeResponse.data
       
       } catch (error) {
         console.error('Полная ошибка добавления отзыва:', error)
 
         let errorMessage = 'Неизвестная ошибка при добавлении отзыва'
 
-        // Обработка разных типов ошибок
         if (error.code === 'NETWORK_ERROR') {
           errorMessage = 'Проблемы с соединением. Проверьте подключение.'
         } else if (error.response) {
@@ -379,7 +364,6 @@ export default {
 
     }
 
-    // Форматирование даты
     const formatDate = (dateString) => {
       return new Date(dateString).toLocaleDateString('ru-RU', {
         year: 'numeric',
@@ -409,7 +393,6 @@ export default {
       return 'отзывов'
     }
 
-    // Выход из системы
     const logout = () => {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user_data')
@@ -430,7 +413,7 @@ export default {
       currentImage,
       newReview,
       isAuthenticated,
-      getFullImageUrl,
+      getFullImagePath,
       handleImageError,
       nextImage,
       prevImage,

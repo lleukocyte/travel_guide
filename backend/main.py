@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.users_router import user_router
@@ -7,6 +6,8 @@ from backend.database import create_tables, delete_tables
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 import os
+import nltk
+nltk.download('stopwords')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -1,4 +1,3 @@
-# database.py
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy import String, DateTime, Boolean, Text, ForeignKey, Integer, Float, JSON

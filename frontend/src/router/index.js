@@ -1,4 +1,3 @@
-//index.js
 import { createRouter, createWebHistory } from 'vue-router'
 import Places from '../components/Places.vue'
 import Auth from '../components/Auth.vue'
@@ -23,8 +22,7 @@ const routes = [
   {
     path: '/place/:id',
     name: 'PlaceDetails',
-    component: PlaceDetails,
-    meta: { requiresAuth: false }
+    component: PlaceDetails
   }
 ]
 

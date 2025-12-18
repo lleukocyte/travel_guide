@@ -1,4 +1,3 @@
-# user_crud.py
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from backend.database import User, new_session

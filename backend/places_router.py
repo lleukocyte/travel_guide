@@ -1,4 +1,3 @@
-#places_router.py
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File, Form
 from typing import List, Optional
 import os
@@ -96,8 +95,9 @@ async def create_place(
         raise HTTPException(status_code=400, detail=str(e))
 
 @places_router.get("/", response_model=List[PlaceRead])
-async def get_places(city: Optional[str] = Query(None)):
-    places = await PlaceCrud.get_all_places(city=city)
+async def get_places(city: Optional[str] = Query(None),
+                     current_user: User = Depends(get_current_user)):
+    places = await PlaceCrud.get_all_places(city=city, user=current_user)
     result = []
     for place in places:
         place_data = serialize_place(place)

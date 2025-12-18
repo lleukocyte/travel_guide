@@ -1,4 +1,3 @@
-<!-- Places.vue -->
 <template>
   <div class="places-app">
     <div class="app-container">
@@ -210,42 +209,24 @@ export default {
     const API_BASE = 'http://localhost:8000/api'
     const BACKEND_BASE = 'http://localhost:8000'
 
-    // Вычисляемое свойство для отфильтрованных мест
     const filteredPlaces = computed(() => {
       if (!selectedCity.value) return []
       return places.value.filter(place => place.city === selectedCity.value)
     })
 
-    const loadYandexMaps = () => {
+    const loadMap = () => {
       return new Promise((resolve) => {
         if (window.ymaps) {
           resolve(window.ymaps);
           return;
         }
-
-        const script = document.createElement('script');
-        script.src = `https://api-maps.yandex.ru/2.1/?apikey=${process.env.GEOCODER_API_KEY}&lang=ru_RU&coordorder=latlong`;
-        script.type = 'text/javascript';
-        
-        script.onload = () => {
-          window.ymaps.ready(() => {
-            resolve(window.ymaps);
-          });
-        };
-        
-        script.onerror = () => {
-          console.error('Ошибка загрузки Яндекс.Карт');
-          resolve(null);
-        };
-        
-        document.head.appendChild(script);
       });
     };
 
     const initMap = async () => {
       if (!selectedCity.value) return
       
-      const ymaps = await loadYandexMaps();
+      const ymaps = await loadMap();
       if (!ymaps || !mapContainer.value) return
       
       try {
@@ -551,7 +532,6 @@ export default {
       }
     }
 
-    // Навигация между вкладками
     const navigateTo = (tab) => {
       if (tab === 'favorites') {
         router.push('/favorites')
@@ -618,7 +598,6 @@ export default {
       viewPlaceDetails(place)
     }
     
-    // Обработчик для кнопок в балунах
     const setupBalloonHandlers = () => {
       document.addEventListener('click', (e) => {
         if (e.target.classList.contains('balloon-btn')) {
