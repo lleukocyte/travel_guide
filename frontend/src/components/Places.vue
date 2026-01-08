@@ -110,7 +110,6 @@
       </main>
     </div>
 
-    <!-- Модальное окно добавления места -->
     <div v-if="showAddForm" class="modal-overlay">
       <div class="modal-content">
         <h2>Добавить новое место</h2>
@@ -753,7 +752,6 @@ export default {
   background: #c0392b;
 }
 
-/* Основное содержимое */
 .main-content {
   flex: 1;
   padding: 20px;
@@ -979,7 +977,6 @@ export default {
   cursor: not-allowed;
 }
 
-/* Стили для модального окна */
 .modal-overlay {
   position: fixed;
   top: 0;

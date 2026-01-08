@@ -390,12 +390,12 @@ export default {
 }
 
 .message.error {
-  background-color: #e94253;
+  background-color: #fdb2ba;
   color: rgb(219, 1, 1);
 }
 
 .message.success {
-  background-color: #34a74f;
+  background-color: #94ffad;
   color: rgb(9, 43, 7);
 }
 </style>
