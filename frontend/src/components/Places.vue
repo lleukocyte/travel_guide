@@ -414,6 +414,7 @@ export default {
         resetNewPlaceForm()
         
         await loadPlaces()
+        await loadCities()
 
       } catch (error) {
         console.error('Ошибка добавления места:', error)
